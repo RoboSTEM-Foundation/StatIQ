@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>development</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>stripDebugSymbols</key>
+	<true/>
+	<key>uploadBitcode</key>
+	<false/>
+	<key>uploadSymbols</key>
+	<false/>
+	<key>generateAppStoreInformation</key>
+	<false/>
+	<key>manageVersionAndBuildNumber</key>
+	<false/>
+	<key>compileBitcode</key>
+	<false/>
+	<key>embedOnDemandResourcesAssetPacksInBundle</key>
+	<false/>
+	<key>thinning</key>
+	<string>&lt;none&gt;</string>
+	<key>bundleIdentifier</key>
+	<string>com.example.theCappedPins</string>
+</dict>
+</plist> 
