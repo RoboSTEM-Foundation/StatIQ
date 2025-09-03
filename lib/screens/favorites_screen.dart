@@ -5,7 +5,7 @@ import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
-import 'package:stat_iq/screens/event_details_screen.dart';
+// import 'package:stat_iq/screens/event_details_screen.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});

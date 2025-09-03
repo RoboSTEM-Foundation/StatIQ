@@ -8,7 +8,7 @@ import 'package:stat_iq/screens/events_screen.dart';
 import 'package:stat_iq/screens/settings_screen.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/services/user_settings.dart';
-import 'package:stat_iq/services/notification_service.dart';
+// import 'package:stat_iq/services/notification_service.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
 

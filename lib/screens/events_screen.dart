@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
-import 'package:stat_iq/models/team.dart';
+// import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';

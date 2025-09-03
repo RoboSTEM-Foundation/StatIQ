@@ -4,7 +4,7 @@ import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/widgets/vex_iq_score_card.dart';
 import 'package:stat_iq/constants/app_constants.dart';
-import 'package:stat_iq/constants/api_config.dart';
+// import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
 
 class TeamDetailsScreen extends StatefulWidget {
