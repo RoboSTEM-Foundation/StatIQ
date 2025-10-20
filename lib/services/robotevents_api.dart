@@ -137,6 +137,11 @@ class RobotEventsAPI {
     );
     
     print('Team lookup returned ${data.length} results for ${teamNumber?.isNotEmpty == true ? "number $teamNumber" : "ID $teamId"}');
+    if (data.isNotEmpty) {
+      print('🔍 First team result: ${data.first}');
+    } else {
+      print('🔍 No team results found for search: $params');
+    }
     
     final teams = <Team>[];
     for (final teamData in data) {
@@ -308,17 +313,133 @@ class RobotEventsAPI {
     int? seasonId,
     int page = 1,
   }) async {
-    final params = ApiConfig.getSkillsParams(
-      seasonId: seasonId,
-      page: page,
-    );
+    final effectiveSeasonId = seasonId ?? ApiConfig.currentVexIQSeasonId;
+    final params = <String, String>{
+      'post_season': '0',
+      'grade_level': 'Middle School',
+    };
     
-    final data = await roboteventsRequest(
-      requestUrl: '/skills',
-      params: params,
-    );
+    final url = 'https://www.robotevents.com/api/seasons/$effectiveSeasonId/skills';
     
-    return data;
+    try {
+      final response = await http.get(
+        Uri.parse(url).replace(queryParameters: params),
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0',
+        },
+      ).timeout(_requestTimeout);
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as List<dynamic>;
+        return data;
+      } else {
+        print('Error loading skills rankings: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('Error loading skills rankings: $e');
+      return [];
+    }
+  }
+  
+  // Get CSV download URL for skills rankings
+  static String getSkillsCsvDownloadUrl({
+    int? seasonId,
+    bool includePostSeason = false,
+    String? gradeLevel,
+  }) {
+    final effectiveSeasonId = seasonId ?? ApiConfig.currentVexIQSeasonId;
+    final params = <String, String>{};
+    
+    if (includePostSeason) {
+      params['post_season'] = '1';
+    }
+    
+    if (gradeLevel != null && gradeLevel.isNotEmpty) {
+      params['grade_level'] = gradeLevel;
+    }
+    
+    final queryString = params.isNotEmpty 
+        ? '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}'
+        : '';
+    
+    return '${ApiConfig.robotEventsBaseUrl}/seasons/$effectiveSeasonId/skills$queryString';
+  }
+  
+  // Download skills data as CSV content
+  static Future<String> downloadSkillsCsv({
+    int? seasonId,
+    bool includePostSeason = false,
+    String? gradeLevel,
+  }) async {
+    final effectiveSeasonId = seasonId ?? ApiConfig.currentVexIQSeasonId;
+    final params = <String, String>{};
+    
+    if (includePostSeason) {
+      params['post_season'] = '1';
+    } else {
+      params['post_season'] = '0';
+    }
+    
+    if (gradeLevel != null && gradeLevel.isNotEmpty) {
+      params['grade_level'] = gradeLevel;
+    }
+    
+    final url = 'https://www.robotevents.com/api/seasons/$effectiveSeasonId/skills';
+    
+    try {
+      final response = await http.get(
+        Uri.parse(url).replace(queryParameters: params),
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0',
+        },
+      ).timeout(_requestTimeout);
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as List<dynamic>;
+        
+        // Convert JSON to CSV
+        if (data.isEmpty) {
+          return 'No data available';
+        }
+        
+        final csvBuffer = StringBuffer();
+        
+        // CSV Header
+        csvBuffer.writeln('Rank,Team Number,Team Name,Organization,Score,Programming Skills,Driver Skills,Max Programming,Max Driver');
+        
+        // CSV Data
+        for (final item in data) {
+          final team = item['team'] as Map<String, dynamic>?;
+          final scores = item['scores'] as Map<String, dynamic>?;
+          
+          final rank = item['rank']?.toString() ?? '';
+          final score = scores?['score']?.toString() ?? '0';
+          final programming = scores?['programming']?.toString() ?? '0';
+          final driver = scores?['driver']?.toString() ?? '0';
+          final maxProgramming = scores?['maxProgramming']?.toString() ?? '0';
+          final maxDriver = scores?['maxDriver']?.toString() ?? '0';
+          
+          final teamNumber = team?['team']?.toString() ?? '';
+          final teamName = team?['teamName']?.toString() ?? '';
+          final organization = team?['organization']?.toString() ?? '';
+          
+          // Escape CSV fields that contain commas or quotes
+          final escapedTeamName = teamName.contains(',') || teamName.contains('"') ? '"$teamName"' : teamName;
+          final escapedOrganization = organization.contains(',') || organization.contains('"') ? '"$organization"' : organization;
+          
+          csvBuffer.writeln('$rank,$teamNumber,$escapedTeamName,$escapedOrganization,$score,$programming,$driver,$maxProgramming,$maxDriver');
+        }
+        
+        return csvBuffer.toString();
+      } else {
+        throw Exception('Failed to download data: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error downloading CSV: $e');
+    }
   }
   
   // Search events (updated to use scraping approach as primary method)
@@ -326,6 +447,7 @@ class RobotEventsAPI {
     String? query,
     int? seasonId,
     int? levelClass,
+    List<String>? levels,
     int page = 1,
   }) async {
     print('=== Event Search Debug ===');
@@ -340,6 +462,7 @@ class RobotEventsAPI {
         query: query,
         seasonId: seasonId,
         levelClass: levelClass,
+        levels: levels,
         page: page,
       );
     }
@@ -349,6 +472,7 @@ class RobotEventsAPI {
       query: query,
       seasonId: seasonId,
       levelClass: levelClass,
+      levels: levels,
       page: page,
     );
     
@@ -604,6 +728,7 @@ class RobotEventsAPI {
     String? query,
     int? seasonId,
     int? levelClass,
+    List<String>? levels,
     int page = 1,
   }) async {
     print('=== Enhanced Event Search Debug ===');
@@ -618,6 +743,7 @@ class RobotEventsAPI {
         query: query,
         seasonId: seasonId,
         levelClass: levelClass,
+        levels: levels,
         page: page,
       );
     }
@@ -769,6 +895,7 @@ class RobotEventsAPI {
       query: query,
       seasonId: seasonId,
       levelClass: levelClass,
+      levels: levels,
       page: page,
     );
   }
@@ -870,6 +997,7 @@ class RobotEventsAPI {
     String? query,
     int? seasonId,
     int? levelClass,
+    List<String>? levels,
     int page = 1,
   }) async {
     print('=== Enhanced Fallback Search ===');
@@ -889,6 +1017,7 @@ class RobotEventsAPI {
         query: query,
         seasonId: seasonId,
         levelClass: levelClass,
+        levels: levels,
         page: page,
       );
     }
@@ -908,6 +1037,7 @@ class RobotEventsAPI {
         query: query,
         seasonId: selectedSeasonId,
         levelClass: levelClass,
+        levels: levels,
         page: 1,
       );
       print('🔍 Strategy 1 URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params1)}');
@@ -952,6 +1082,7 @@ class RobotEventsAPI {
         final params2 = ApiConfig.getEventSearchParams(
           seasonId: selectedSeasonId,
           levelClass: levelClass,
+          levels: levels,
           page: pageNum,
         );
         print('🔍 Strategy 2 Page $pageNum URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params2)}');
@@ -1033,6 +1164,7 @@ class RobotEventsAPI {
           query: word,
           seasonId: selectedSeasonId,
           levelClass: levelClass,
+          levels: levels,
           page: 1,
         );
         print('🔍 Strategy 3 word "$word" URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params3)}');
@@ -1274,6 +1406,63 @@ class RobotEventsAPI {
     return teams;
   }
   
+  // Get team matches directly (Bug Patch 3 requirement)
+  static Future<List<dynamic>> getTeamMatches({
+    required int teamId,
+    List<int>? eventIds,
+    int? seasonId,
+  }) async {
+    print('=== Team Matches Debug ===');
+    print('Team ID: $teamId');
+    print('Event IDs: $eventIds');
+    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    
+    final params = <String, dynamic>{};
+    if (seasonId != null) {
+      params['season'] = seasonId;
+    }
+    
+    // Build the URL manually to handle array parameters correctly
+    String url = '${ApiConfig.robotEventsBaseUrl}/teams/$teamId/matches';
+    final queryParts = <String>[];
+    
+    // Add season parameter
+    if (seasonId != null) {
+      queryParts.add('season=$seasonId');
+    }
+    
+    // Add event array parameters
+    if (eventIds != null && eventIds.isNotEmpty) {
+      for (final eventId in eventIds) {
+        queryParts.add('event[]=$eventId');
+      }
+    }
+    
+    if (queryParts.isNotEmpty) {
+      url += '?${queryParts.join('&')}';
+    }
+    
+    print('🔍 Team Matches URL: $url');
+    
+    // Use direct HTTP request for array parameters
+    final response = await http.get(
+      Uri.parse(url),
+      headers: ApiConfig.robotEventsHeaders,
+    );
+    
+    if (response.statusCode == 200) {
+      final jsonData = json.decode(response.body);
+      final data = jsonData['data'] as List<dynamic>? ?? [];
+      print('Team Matches API returned ${data.length} matches');
+      print('=== End Team Matches Debug ===');
+      return data;
+    } else {
+      print('Team Matches API error: ${response.statusCode} - ${response.body}');
+      print('=== End Team Matches Debug ===');
+      throw Exception('API error: ${response.statusCode}');
+    }
+  }
+
   // Get matches for an event division with pagination support
   static Future<List<dynamic>> getEventMatches({
     required int eventId,
@@ -1780,6 +1969,7 @@ class RobotEventsAPI {
     String? query,
     int? seasonId,
     int? levelClass,
+    List<String>? levels,
     int page = 1,
   }) async {
     print('=== Fallback API Search ===');
@@ -1788,6 +1978,7 @@ class RobotEventsAPI {
       query: query,
       seasonId: seasonId,
       levelClass: levelClass,
+      levels: levels,
       page: page,
     );
     

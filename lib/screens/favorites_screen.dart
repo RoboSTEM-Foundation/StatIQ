@@ -5,6 +5,7 @@ import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 // import 'package:stat_iq/screens/event_details_screen.dart';
 
 class FavoritesScreen extends StatefulWidget {
@@ -193,7 +194,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         subtitle: 'Events you favorite will appear here',
         actionText: 'Browse Events',
         onAction: () {
-          // TODO: Navigate to events screen
+          // Navigate to events screen (tab index 3)
+          // This would need to be passed from the parent widget
         },
       );
     }
@@ -220,7 +222,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           child: Text(
             team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
             style: const TextStyle(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -237,7 +239,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             Text(
               'Team ${team.number} • ${team.grade}',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             if (team.organization.isNotEmpty) ...[
@@ -247,14 +249,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   Icon(
                     Icons.location_on,
                     size: 16,
-                    color: AppConstants.textSecondary,
+                    color: ThemeUtils.getSecondaryTextColor(context),
                   ),
                   const SizedBox(width: AppConstants.spacingXS),
                   Expanded(
                     child: Text(
                       team.organization,
                       style: AppConstants.caption.copyWith(
-                        color: AppConstants.textSecondary,
+                        color: ThemeUtils.getSecondaryTextColor(context),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -334,7 +336,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               Text(
                 eventDate,
                 style: AppConstants.bodyText2.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
                 ),
               ),
             if (eventLocation.isNotEmpty) ...[
@@ -344,14 +346,14 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                   Icon(
                     Icons.location_on,
                     size: 16,
-                    color: AppConstants.textSecondary,
+                    color: ThemeUtils.getSecondaryTextColor(context),
                   ),
                   const SizedBox(width: AppConstants.spacingXS),
                   Expanded(
                     child: Text(
                       eventLocation,
                       style: AppConstants.caption.copyWith(
-                        color: AppConstants.textSecondary,
+                        color: ThemeUtils.getSecondaryTextColor(context),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -412,13 +414,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             Icon(
               icon,
               size: 80,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingL),
             Text(
               title,
               style: AppConstants.headline5.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
@@ -427,7 +429,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             Text(
               subtitle,
               style: AppConstants.bodyText1.copyWith(
-                color: AppConstants.textSecondary.withOpacity(0.7),
+                color: ThemeUtils.getMutedTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),

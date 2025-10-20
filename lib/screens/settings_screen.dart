@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/services/user_settings.dart';
+import 'package:stat_iq/services/team_sync_service.dart';
+import 'package:stat_iq/services/optimized_team_search.dart';
 import 'package:stat_iq/screens/credits_screen.dart';
+import 'package:stat_iq/widgets/optimized_team_search_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,6 +16,42 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  Map<String, dynamic>? _syncStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSyncStatus();
+  }
+
+  Future<void> _loadSyncStatus() async {
+    final status = await TeamSyncService.getSyncStatus();
+    if (mounted) {
+      setState(() {
+        _syncStatus = status;
+      });
+    }
+  }
+
+  String _formatLastSyncTime(DateTime? lastSync) {
+    if (lastSync == null) {
+      return 'Never synced';
+    }
+    
+    final now = DateTime.now();
+    final difference = now.difference(lastSync);
+    
+    if (difference.inDays > 0) {
+      return 'Last synced ${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
+    } else if (difference.inHours > 0) {
+      return 'Last synced ${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
+    } else if (difference.inMinutes > 0) {
+      return 'Last synced ${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
+    } else {
+      return 'Last synced just now';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<UserSettings>(
@@ -52,6 +92,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: AppConstants.spacingM),
             ListTile(
+              leading: const Icon(Icons.group),
+              title: const Text('My Team'),
+              subtitle: Text(userSettings.myTeam ?? 'Not Set'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                _showMyTeamDialog(context, userSettings);
+              },
+            ),
+            const Divider(),
+            ListTile(
               leading: const Icon(Icons.notifications),
               title: const Text('Notifications'),
               subtitle: const Text('Manage push notifications'),
@@ -69,6 +119,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () {
                 _showLanguageDialog(context);
               },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.dark_mode),
+              title: const Text('Dark Mode'),
+              subtitle: const Text('Switch between light and dark themes'),
+              trailing: Switch(
+                value: userSettings.isDarkMode,
+                onChanged: (value) async {
+                  await userSettings.setDarkMode(value);
+                },
+                activeColor: AppConstants.vexIQOrange,
+              ),
             ),
             const Divider(),
             ListTile(
@@ -101,16 +164,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: AppConstants.spacingM),
             ListTile(
-              leading: const Icon(Icons.download),
-              title: const Text('Download Data'),
-              subtitle: const Text('Export your favorites and settings'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                _showDownloadDialog(context);
-              },
-            ),
-            const Divider(),
-            ListTile(
               leading: const Icon(Icons.delete),
               title: const Text('Clear Cache'),
               subtitle: const Text('Free up storage space'),
@@ -123,7 +176,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Sync Data'),
-              subtitle: const Text('Last synced 2 hours ago'),
+              subtitle: Text(_syncStatus != null 
+                  ? _formatLastSyncTime(_syncStatus!['lastSync'])
+                  : 'Loading...'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 _showSyncDialog(context);
@@ -214,7 +269,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return 'Custom';
   }
 
-
+  void _showMyTeamDialog(BuildContext context, UserSettings userSettings) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Your Team'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: OptimizedTeamSearchWidget(
+            onTeamSelected: (team) {
+              userSettings.setMyTeam(team.number);
+              Navigator.of(context).pop();
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showNotificationsDialog(BuildContext context) {
     showDialog(
@@ -264,52 +342,189 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showDownloadDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Download Data'),
-        content: const Text('Data export feature coming soon...'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showClearCacheDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear Cache'),
-        content: const Text('Cache clearing feature coming soon...'),
+        content: const Text('This will clear all cached data including team lists, events, and search indexes. You will need to re-download data when you next use the app.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _clearCache(context);
+            },
+            child: const Text('Clear'),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _clearCache(BuildContext context) async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Clearing cache...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Clear SharedPreferences cache
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      
+      // Clear team search cache
+      await OptimizedTeamSearch.clearCache();
+      
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        // Refresh sync status
+        await _loadSyncStatus();
+        
+        // Show success dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Cache Cleared'),
+            content: const Text('All cached data has been cleared successfully!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        // Show error dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Clear Failed'),
+            content: Text('Failed to clear cache: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
   void _showSyncDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Sync Data'),
-        content: const Text('Data sync feature coming soon...'),
+        title: const Text('Sync Team List'),
+        content: const Text('This will download the latest team database from GitHub. This may take a few moments.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _syncTeamList(context);
+            },
+            child: const Text('Sync'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _syncTeamList(BuildContext context) async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        title: Text('Syncing Team List'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Downloading team data from GitHub...'),
+            SizedBox(height: 8),
+            Text('This may take up to 2 minutes for large files', 
+                 style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Force sync the team list
+      await TeamSyncService.syncTeamList();
+      
+      // Reinitialize the search with new data
+      await OptimizedTeamSearch.initialize();
+      
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        // Refresh sync status
+        await _loadSyncStatus();
+        
+        // Show success dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Sync Complete'),
+            content: const Text('Team list has been successfully updated!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        // Show error dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Sync Failed'),
+            content: Text('Failed to sync team list: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _showAboutDialog(BuildContext context) {
@@ -350,7 +565,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Privacy Policy'),
-        content: const Text('Privacy policy coming soon...'),
+        content: const Text(
+          'We do not collect any personal data from users. '
+          'All data is stored locally on your device and is not transmitted to our servers. '
+          'The app only fetches public VEX IQ competition data from RobotEvents.com.'
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -366,7 +585,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Terms of Service'),
-        content: const Text('Terms of service coming soon...'),
+        content: const Text(
+          'By using this app, you agree not to abuse the RobotEvents API. '
+          'Please use the app responsibly and do not attempt to overload or misuse the API endpoints. '
+          'The app is provided as-is for educational and scouting purposes.'
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -382,7 +605,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Send Feedback'),
-        content: const Text('Feedback feature coming soon...'),
+        content: const Text(
+          'Have feedback, suggestions, or found a bug? '
+          'Message @_lvdg on Discord!'
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),

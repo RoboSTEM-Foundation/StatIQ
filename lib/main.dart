@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:stat_iq/screens/home_screen.dart';
 import 'package:stat_iq/screens/teams_screen.dart';
 import 'package:stat_iq/screens/events_screen.dart';
+import 'package:stat_iq/screens/explore_screen.dart';
 
 import 'package:stat_iq/screens/settings_screen.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
@@ -78,100 +79,22 @@ class TheCappedPinsApp extends StatelessWidget {
         if (snapshot.hasData) {
           return ChangeNotifierProvider<UserSettings>.value(
             value: snapshot.data!,
-            child: MaterialApp(
-      title: 'statIQ - VEX IQ Mix and Match',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppConstants.vexIQOrange,
-          brightness: Brightness.light,
-        ),
-        fontFamily: 'Inter',
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: AppConstants.textPrimary,
-          elevation: 0,
-          centerTitle: true,
-          titleTextStyle: AppConstants.headline5.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          systemOverlayStyle: const SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.dark,
-          ),
-        ),
-        cardTheme: CardTheme(
-          elevation: AppConstants.elevationS,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-          ),
-          margin: const EdgeInsets.all(AppConstants.spacingS),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppConstants.vexIQOrange,
-            foregroundColor: Colors.white,
-            elevation: AppConstants.elevationS,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-            ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.spacingL,
-              vertical: AppConstants.spacingM,
-            ),
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: AppConstants.vexIQOrange,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-            ),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-            borderSide: const BorderSide(color: AppConstants.borderColor),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-            borderSide: BorderSide(color: AppConstants.vexIQOrange, width: 2),
-          ),
-          contentPadding: const EdgeInsets.all(AppConstants.spacingM),
-        ),
-        bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          backgroundColor: Colors.white,
-          selectedItemColor: AppConstants.vexIQOrange,
-          unselectedItemColor: AppConstants.textSecondary,
-          type: BottomNavigationBarType.fixed,
-          elevation: 8,
-          selectedLabelStyle: AppConstants.caption.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: AppConstants.caption,
-        ),
-        progressIndicatorTheme: ProgressIndicatorThemeData(
-          color: AppConstants.vexIQOrange,
-        ),
-        snackBarTheme: SnackBarThemeData(
-          backgroundColor: AppConstants.textPrimary,
-          contentTextStyle: AppConstants.bodyText2.copyWith(
-            color: Colors.white,
-          ),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-          ),
-        ),
-      ),
-      home: const MainNavigation(),
-              routes: {
-                '/home': (context) => const MainNavigation(),
-                '/teams': (context) => const MainNavigation(initialIndex: 1),
-                '/events': (context) => const MainNavigation(initialIndex: 2),
-                '/settings': (context) => const MainNavigation(initialIndex: 3),
+            child: Consumer<UserSettings>(
+              builder: (context, userSettings, child) {
+                return MaterialApp(
+                  title: 'statIQ - VEX IQ Mix and Match',
+                  debugShowCheckedModeBanner: false,
+                  theme: _buildLightTheme(),
+                  darkTheme: _buildDarkTheme(),
+                  themeMode: userSettings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+                  home: const MainNavigation(),
+                  routes: {
+                    '/home': (context) => const MainNavigation(),
+                    '/teams': (context) => const MainNavigation(initialIndex: 1),
+                    '/events': (context) => const MainNavigation(initialIndex: 2),
+                    '/settings': (context) => const MainNavigation(initialIndex: 3),
+                  },
+                );
               },
             ),
           );
@@ -190,14 +113,14 @@ class TheCappedPinsApp extends StatelessWidget {
                     Text(
                       'Initializing statIQ',
                       style: AppConstants.headline6.copyWith(
-                        color: AppConstants.textPrimary,
+                        color: Theme.of(context).textTheme.titleLarge?.color,
                       ),
                     ),
                     const SizedBox(height: 10),
                     Text(
                       'VEX IQ Mix and Match 2025-2026',
                       style: AppConstants.bodyText2.copyWith(
-                        color: AppConstants.textSecondary,
+                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
                       ),
                     ),
                   ],
@@ -228,9 +151,10 @@ class _MainNavigationState extends State<MainNavigation> {
   
   List<Widget> get _screens => [
     HomeScreen(onNavigateToTab: _navigateToTab),
+    const ExploreScreen(),
     const TeamsScreen(),
     const EventsScreen(),
-    const SettingsScreen(),
+    // const SettingsScreen(),
   ];
 
   final List<NavigationItem> _navigationItems = [
@@ -238,6 +162,11 @@ class _MainNavigationState extends State<MainNavigation> {
       icon: Icons.home_outlined,
       activeIcon: Icons.home,
       label: 'Home',
+    ),
+    NavigationItem(
+      icon: Icons.explore_outlined,
+      activeIcon: Icons.explore,
+      label: 'Explore',
     ),
     NavigationItem(
       icon: Icons.people_outline,
@@ -249,11 +178,11 @@ class _MainNavigationState extends State<MainNavigation> {
       activeIcon: Icons.event,
       label: 'Events',
     ),
-    NavigationItem(
-      icon: Icons.settings_outlined,
-      activeIcon: Icons.settings,
-      label: 'Settings',
-    ),
+    // NavigationItem(
+    //   icon: Icons.settings_outlined,
+    //   activeIcon: Icons.settings,
+    //   label: 'Settings',
+    // ),
   ];
 
   @override
@@ -312,4 +241,206 @@ class NavigationItem {
     required this.activeIcon,
     required this.label,
   });
+}
+
+// Theme building methods
+ThemeData _buildLightTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppConstants.vexIQOrange,
+      brightness: Brightness.light,
+    ),
+    fontFamily: 'Inter',
+    appBarTheme: AppBarTheme(
+      backgroundColor: Colors.white,
+      foregroundColor: AppConstants.textPrimary,
+      elevation: 0,
+      centerTitle: true,
+      titleTextStyle: AppConstants.headline5.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      systemOverlayStyle: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+    ),
+    cardTheme: CardTheme(
+      elevation: AppConstants.elevationS,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+      ),
+      margin: const EdgeInsets.all(AppConstants.spacingS),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppConstants.vexIQOrange,
+        foregroundColor: Colors.white,
+        elevation: AppConstants.elevationS,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spacingL,
+          vertical: AppConstants.spacingM,
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: AppConstants.vexIQOrange,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        ),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        borderSide: const BorderSide(color: AppConstants.borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        borderSide: BorderSide(color: AppConstants.vexIQOrange, width: 2),
+      ),
+      contentPadding: const EdgeInsets.all(AppConstants.spacingM),
+    ),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: Colors.white,
+      selectedItemColor: AppConstants.vexIQOrange,
+      unselectedItemColor: AppConstants.textSecondary,
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+      selectedLabelStyle: AppConstants.caption.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      unselectedLabelStyle: AppConstants.caption,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: AppConstants.vexIQOrange,
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: AppConstants.textPrimary,
+      contentTextStyle: AppConstants.bodyText2.copyWith(
+        color: Colors.white,
+      ),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+      ),
+    ),
+  );
+}
+
+ThemeData _buildDarkTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppConstants.vexIQOrange,
+      brightness: Brightness.dark,
+    ),
+    fontFamily: 'Inter',
+    textTheme: const TextTheme(
+      displayLarge: TextStyle(color: Colors.white),
+      displayMedium: TextStyle(color: Colors.white),
+      displaySmall: TextStyle(color: Colors.white),
+      headlineLarge: TextStyle(color: Colors.white),
+      headlineMedium: TextStyle(color: Colors.white),
+      headlineSmall: TextStyle(color: Colors.white),
+      titleLarge: TextStyle(color: Colors.white),
+      titleMedium: TextStyle(color: Colors.white),
+      titleSmall: TextStyle(color: Colors.white),
+      bodyLarge: TextStyle(color: Colors.white),
+      bodyMedium: TextStyle(color: Colors.white),
+      bodySmall: TextStyle(color: Colors.white),
+      labelLarge: TextStyle(color: Colors.white),
+      labelMedium: TextStyle(color: Colors.white),
+      labelSmall: TextStyle(color: Colors.white),
+    ),
+    iconTheme: const IconThemeData(
+      color: Colors.white,
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: const Color(0xFF1E1E1E),
+      foregroundColor: Colors.white,
+      elevation: 0,
+      centerTitle: true,
+      titleTextStyle: AppConstants.headline5.copyWith(
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+      systemOverlayStyle: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    ),
+    cardTheme: CardTheme(
+      elevation: AppConstants.elevationS,
+      color: const Color(0xFF1A1A1A),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+      ),
+      margin: const EdgeInsets.all(AppConstants.spacingS),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppConstants.vexIQOrange,
+        foregroundColor: Colors.white,
+        elevation: AppConstants.elevationS,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spacingL,
+          vertical: AppConstants.spacingM,
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: AppConstants.vexIQOrange,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        ),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        borderSide: const BorderSide(color: Color(0xFF333333)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        borderSide: BorderSide(color: AppConstants.vexIQOrange, width: 2),
+      ),
+      contentPadding: const EdgeInsets.all(AppConstants.spacingM),
+      fillColor: const Color(0xFF1A1A1A),
+      filled: true,
+    ),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: const Color(0xFF1E1E1E),
+      selectedItemColor: AppConstants.vexIQOrange,
+      unselectedItemColor: const Color(0xFF9E9E9E),
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+      selectedLabelStyle: AppConstants.caption.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      unselectedLabelStyle: AppConstants.caption,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: AppConstants.vexIQOrange,
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: const Color(0xFF1A1A1A),
+      contentTextStyle: AppConstants.bodyText2.copyWith(
+        color: Colors.white,
+      ),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+      ),
+    ),
+    scaffoldBackgroundColor: const Color(0xFF0F0F0F),
+  );
 } 

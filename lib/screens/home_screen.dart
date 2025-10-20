@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/models/event.dart';
+import 'package:stat_iq/screens/event_details_screen.dart';
 // import 'package:stat_iq/services/vex_iq_scoring.dart';
 import 'package:stat_iq/widgets/vex_iq_score_card.dart';
-import 'package:stat_iq/screens/event_details_screen.dart';
+import 'package:stat_iq/screens/team_details_screen.dart';
+import 'package:stat_iq/screens/settings_screen.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
+import 'package:stat_iq/widgets/optimized_team_search_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   final Function(int)? onNavigateToTab;
@@ -28,6 +33,58 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadFavoriteTeams();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkFirstLaunch();
+    });
+  }
+
+  Future<void> _checkFirstLaunch() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstLaunch = prefs.getBool('first_launch') ?? true;
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+
+    if (isFirstLaunch && userSettings.myTeam == null) {
+      _showMyTeamDialog();
+      await prefs.setBool('first_launch', false);
+    }
+  }
+
+  void _showMyTeamDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final keyboardHeight = mediaQuery.viewInsets.bottom;
+        final availableHeight = mediaQuery.size.height - keyboardHeight;
+        
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Expanded(child: Text('Select Your Team')),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Skip'),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: availableHeight * 0.85,
+            child: OptimizedTeamSearchWidget(
+              isSelectionMode: true,
+              onTeamSelected: (team) {
+                final userSettings = Provider.of<UserSettings>(context, listen: false);
+                userSettings.setMyTeam(team.number);
+                // Auto-add to favorites
+                userSettings.addFavoriteTeam(team.number);
+                Navigator.of(context).pop();
+              },
+            ),
+          ),
+          actions: const [], // Remove actions since Skip is now in title
+        );
+      },
+    );
   }
 
   Future<void> _loadFavoriteTeams() async {
@@ -58,9 +115,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final events = <Event>[];
       for (final eventSku in favoriteEventSkus) {
         try {
-          // For now, we'll just note that we have favorite events
-          // In a real implementation, we'd need an API call to get event by SKU
-          print('Favorite event SKU: $eventSku');
+          final eventData = await RobotEventsAPI.getEventBySku(eventSku);
+          if (eventData != null) {
+            events.add(Event.fromJson(eventData));
+          }
         } catch (e) {
           print('Error loading event $eventSku: $e');
         }
@@ -98,6 +156,15 @@ class _HomeScreenState extends State<HomeScreen> {
               IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: _loadFavoriteTeams,
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                },
               ),
             ],
           ),
@@ -149,20 +216,20 @@ class _HomeScreenState extends State<HomeScreen> {
             Icon(
               Icons.favorite_border,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+                color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'No Favorites',
               style: AppConstants.headline5.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'Add teams and events to your favorites to see them here',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -225,18 +292,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: AppConstants.spacingS),
-                  Text(
-                    'Event details will be available in future updates',
-                    style: AppConstants.bodyText2.copyWith(
-                      color: AppConstants.textSecondary,
+                  const SizedBox(height: AppConstants.spacingM),
+                  if (_recentEvents.isNotEmpty) ...[
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _recentEvents.length,
+                      itemBuilder: (context, index) {
+                        final event = _recentEvents[index];
+                        return _buildEventCard(event);
+                      },
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                  ] else ...[
+                    Text(
+                      'Loading favorite events...',
+                      style: AppConstants.bodyText2.copyWith(
+                        color: ThemeUtils.getSecondaryTextColor(context),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   const SizedBox(height: AppConstants.spacingM),
                   ElevatedButton(
                     onPressed: () {
-                      widget.onNavigateToTab?.call(2); // Navigate to Events tab
+                      widget.onNavigateToTab?.call(3); // Navigate to Events tab
                     },
                     child: const Text('View All Events'),
                   ),
@@ -245,6 +324,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEventCard(Event event) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+      child: ListTile(
+        leading: const Icon(Icons.event, color: AppConstants.vexIQGreen),
+        title: Text(
+          event.name,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          event.location,
+          style: TextStyle(
+            color: ThemeUtils.getSecondaryTextColor(context),
+          ),
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventDetailsScreen(event: event),
+            ),
+          );
+        },
       ),
     );
   }
@@ -277,33 +384,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTeamCard(Team team) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
-      elevation: AppConstants.elevationS,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-        onTap: () => _showTeamDetails(team),
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.spacingM),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return Consumer<UserSettings>(
+      builder: (context, userSettings, child) {
+        final isMyTeam = userSettings.myTeam == team.number;
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
+          elevation: AppConstants.elevationS,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+            side: isMyTeam ? BorderSide(
+              color: AppConstants.vexIQBlue,
+              width: 2,
+            ) : BorderSide.none,
+          ),
+          color: isMyTeam ? AppConstants.vexIQBlue.withOpacity(0.1) : null,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+            onTap: () => _showTeamDetails(team),
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.spacingM),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    backgroundColor: AppConstants.vexIQOrange,
-                    radius: 24,
-                    child: Text(
-                      team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
-                      style: AppConstants.bodyText1.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: isMyTeam ? AppConstants.vexIQBlue : AppConstants.vexIQOrange,
+                        radius: 24,
+                        child: Text(
+                          team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
+                          style: AppConstants.bodyText1.copyWith(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
                   const SizedBox(width: AppConstants.spacingM),
                   Expanded(
                     child: Column(
@@ -319,14 +435,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             team.name,
                             style: AppConstants.bodyText1.copyWith(
-                              color: AppConstants.textSecondary,
+                              color: ThemeUtils.getSecondaryTextColor(context),
                             ),
                           ),
                         if (team.organization.isNotEmpty)
                           Text(
                             team.organization,
                             style: AppConstants.caption.copyWith(
-                              color: AppConstants.textSecondary,
+                              color: ThemeUtils.getSecondaryTextColor(context),
                             ),
                           ),
                       ],
@@ -334,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Icon(
                     Icons.chevron_right,
-                    color: AppConstants.textSecondary,
+                    color: ThemeUtils.getSecondaryTextColor(context),
                   ),
                 ],
               ),
@@ -373,7 +489,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(
                         '${team.city}, ${team.region}',
                         style: AppConstants.caption.copyWith(
-                          color: AppConstants.textSecondary,
+                          color: ThemeUtils.getSecondaryTextColor(context),
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -385,14 +501,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+      },
+    );
   }
 
   void _showTeamDetails(Team team) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _TeamDetailsBottomSheet(team: team),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TeamDetailsScreen(team: team),
+      ),
     );
   }
 
@@ -416,7 +534,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   'Search Teams',
                   Icons.people,
                   AppConstants.vexIQBlue,
-                  () => widget.onNavigateToTab?.call(1),
+                  () => widget.onNavigateToTab?.call(2),
                 ),
               ),
               const SizedBox(width: AppConstants.spacingM),
@@ -425,7 +543,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   'Browse Events',
                   Icons.event,
                   AppConstants.vexIQGreen,
-                  () => widget.onNavigateToTab?.call(2),
+                  () => widget.onNavigateToTab?.call(3),
                 ),
               ),
             ],
@@ -524,9 +642,9 @@ class _TeamDetailsBottomSheetState extends State<_TeamDetailsBottomSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(20),
           topRight: Radius.circular(20),
         ),
@@ -538,7 +656,7 @@ class _TeamDetailsBottomSheetState extends State<_TeamDetailsBottomSheet> {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: Colors.grey.shade200,
+                  color: ThemeUtils.getVeryMutedTextColor(context, opacity: 0.2),
                   width: 1,
                 ),
               ),
@@ -551,7 +669,7 @@ class _TeamDetailsBottomSheetState extends State<_TeamDetailsBottomSheet> {
                   child: Text(
                     widget.team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
                     style: AppConstants.bodyText2.copyWith(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -571,7 +689,7 @@ class _TeamDetailsBottomSheetState extends State<_TeamDetailsBottomSheet> {
                         Text(
                           widget.team.name,
                           style: AppConstants.bodyText2.copyWith(
-                            color: AppConstants.textSecondary,
+                            color: ThemeUtils.getSecondaryTextColor(context),
                           ),
                         ),
                     ],

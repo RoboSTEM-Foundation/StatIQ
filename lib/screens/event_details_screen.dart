@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/event.dart';
 import '../models/team.dart';
 import '../services/robotevents_api.dart';
 import '../services/user_settings.dart';
+import '../services/optimized_team_search.dart';
 // import '../services/notification_service.dart';
 import '../constants/app_constants.dart';
+import '../utils/theme_utils.dart';
 import 'team_details_screen.dart';
 
 class EventDetailsScreen extends StatefulWidget {
@@ -51,7 +55,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this); // Combined tournament/matches, added awards
+    _tabController = TabController(length: 4, vsync: this); // Combined rankings and results
     _loadEventData();
   }
 
@@ -281,16 +285,25 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.event.name),
-        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // Share button
+          IconButton(
+              icon: Icon(
+                Icons.share,
+                color: Theme.of(context).iconTheme.color,
+              ),
+            onPressed: _shareEvent,
+            tooltip: 'Share Event',
+          ),
+          // Favorite button
           Consumer<UserSettings>(
             builder: (context, settings, child) {
               final isFavorite = settings.isFavoriteEvent(widget.event.sku);
               return IconButton(
                 icon: Icon(
                   isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: isFavorite ? Colors.red : AppConstants.textSecondary,
+                  color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
                 ),
                 onPressed: () async {
                   if (isFavorite) {
@@ -309,6 +322,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     }
                   }
                 },
+                tooltip: isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
               );
             },
           ),
@@ -316,13 +330,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppConstants.vexIQOrange,
-          unselectedLabelColor: AppConstants.textSecondary,
+          unselectedLabelColor: ThemeUtils.getSecondaryTextColor(context, opacity: 0.6),
           indicatorColor: AppConstants.vexIQOrange,
           tabs: const [
             Tab(text: 'Info', icon: Icon(Icons.info_outline)),
             Tab(text: 'Teams', icon: Icon(Icons.people)),
             Tab(text: 'Tournament', icon: Icon(Icons.schedule)),
-            Tab(text: 'Rankings', icon: Icon(Icons.format_list_numbered)),
             Tab(text: 'Results', icon: Icon(Icons.leaderboard)),
           ],
         ),
@@ -333,8 +346,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           _buildInfoTab(),
           _buildTeamsTab(),
           _buildTournamentTab(),
-          _buildRankingsTab(),
-          _buildResultsTab(),
+          _buildCombinedResultsTab(),
         ],
       ),
     );
@@ -383,6 +395,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               ],
             ),
             const SizedBox(height: AppConstants.spacingM),
+            _buildInfoRow('Event Name', widget.event.name),
             _buildInfoRow('Event Code', widget.event.sku),
             _buildInfoRow('Season', 'Mix & Match (2025-2026)'),
             _buildInfoRow('Program', 'VEX IQ'),
@@ -473,7 +486,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               Text(
                 'No divisions information available',
                 style: AppConstants.bodyText2.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
                 ),
               )
             else
@@ -540,15 +553,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               children: [
                 Expanded(
                   child: _buildStatItem(
-                    'World Skill Rank',
-                    _isLoadingSkills ? '...' : _getWorldSkillRank().toString(),
+                    'Skills Rank in World',
+                    _isLoadingSkills ? '...' : '${_getWorldSkillRank()} (${_getWorldSkillsCombinedPts()})',
                     Icons.public,
                     AppConstants.vexIQBlue,
                   ),
                 ),
                 Expanded(
                   child: _buildStatItem(
-                    'Region Skill Rank',
+                    'Skills Rank in Region',
                     _isLoadingSkills ? '...' : _getRegionSkillRank().toString(),
                     Icons.location_on,
                     AppConstants.vexIQGreen,
@@ -561,20 +574,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               children: [
                 Expanded(
                   child: _buildStatItem(
-                    'Awards',
+                    'Amount of Awards',
                     _isLoadingAwards ? '...' : _awards.length.toString(),
                     Icons.emoji_events,
                     AppConstants.vexIQOrange,
                   ),
                 ),
-                Expanded(
-                  child: _buildStatItem(
-                    'Teams',
-                    _isLoadingTeams ? '...' : _teams.length.toString(),
-                    Icons.people,
-                    AppConstants.vexIQRed,
-                  ),
-                ),
+                const Expanded(child: SizedBox()), // Empty space for layout
               ],
             ),
           ],
@@ -673,7 +679,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   Text(
                     'Based on team performance, skills rankings, and competition level',
                     style: AppConstants.caption.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -740,7 +746,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               label,
               style: AppConstants.bodyText2.copyWith(
                 fontWeight: FontWeight.w600,
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
           ),
@@ -769,7 +775,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.error_outline,
               size: 64,
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
@@ -780,7 +786,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Text(
               _teamsError!,
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -797,20 +803,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.people_outline,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'No Teams Found',
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'This event has no registered teams yet',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
           ],
@@ -823,9 +829,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       itemCount: _teams.length,
       itemBuilder: (context, index) {
         final team = _teams[index];
-        final allianceColor = _getTeamAllianceColor(team.number);
-        
+        final userSettings = Provider.of<UserSettings>(context, listen: false);
+        final isMyTeam = userSettings.myTeam == team.number;
+
         return Card(
+          color: isMyTeam ? AppConstants.vexIQBlue.withOpacity(0.1) : null,
+          shape: isMyTeam
+              ? RoundedRectangleBorder(
+                  side: const BorderSide(color: AppConstants.vexIQBlue, width: 2),
+                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+                )
+              : null,
           margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
           child: ListTile(
             leading: CircleAvatar(
@@ -833,26 +847,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               child: Text(
                 team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
                 style: AppConstants.bodyText2.copyWith(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            title: Row(
-              children: [
-                Expanded(child: Text(team.number)),
-                if (allianceColor != null)
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: allianceColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey.shade300, width: 1),
-                    ),
-                  ),
-              ],
-            ),
+            title: Text(team.number),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -862,14 +862,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     team.organization,
                     style: AppConstants.caption,
                   ),
-                if (allianceColor != null)
-                  Text(
-                    'Alliance: ${allianceColor == Colors.red ? 'Red' : 'Blue'}',
-                    style: AppConstants.caption.copyWith(
-                      color: allianceColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
               ],
             ),
             trailing: Consumer<UserSettings>(
@@ -878,7 +870,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                 return IconButton(
                   icon: Icon(
                     isFavorite ? Icons.favorite : Icons.favorite_border,
-                    color: isFavorite ? Colors.red : AppConstants.textSecondary,
+                    color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
                   ),
                   onPressed: () async {
                     if (isFavorite) {
@@ -891,11 +883,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               },
             ),
             onTap: () {
-              // Navigate to team details
+              // Navigate to team details with event context (Bug Patch 3 requirement)
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => TeamDetailsScreen(team: team),
+                  builder: (context) => TeamDetailsScreen(
+                    team: team,
+                    eventId: widget.event.id, // Pass event ID to filter matches
+                  ),
                 ),
               );
             },
@@ -913,10 +908,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           Container(
             padding: const EdgeInsets.all(AppConstants.spacingM),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -978,7 +973,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.error_outline,
               size: 64,
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
@@ -989,7 +984,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Text(
               _matchesError!,
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1007,20 +1002,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.info_outline,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'No Divisions Found',
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'This event does not have division information available',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1038,20 +1033,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.sports_esports_outlined,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'Select a Division',
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'Choose a division from the dropdown above to view matches',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1071,20 +1066,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.sports_esports_outlined,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'No Matches Found',
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'No matches available for the selected division',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1098,7 +1093,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       padding: const EdgeInsets.all(AppConstants.spacingM),
       itemCount: selectedMatches.length,
       itemBuilder: (context, index) {
-        return _buildMatchCard(selectedMatches[index]);
+        return _buildMatchCard(context, selectedMatches[index]);
       },
     );
   }
@@ -1106,11 +1101,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   // Tournament tab implementation with match scheduling and alliance colors
   Widget _buildTournamentTab() {
     return Column(
-      children: [
+        children: [
         // Team notification header
-        Container(
+          Container(
           padding: const EdgeInsets.all(AppConstants.spacingM),
-          decoration: BoxDecoration(
+            decoration: BoxDecoration(
             color: AppConstants.vexIQGreen.withOpacity(0.1),
             border: Border(
               bottom: BorderSide(color: Colors.grey[300]!, width: 1),
@@ -1120,10 +1115,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             children: [
               Icon(Icons.notifications_active, color: AppConstants.vexIQGreen),
               const SizedBox(width: AppConstants.spacingS),
-              Expanded(
+          Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              children: [
                     Text(
                       'Team Notifications',
                       style: AppConstants.bodyText1.copyWith(
@@ -1134,27 +1129,27 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     Text(
                       'Get notified 1 hour before your team\'s matches',
                       style: AppConstants.caption.copyWith(
-                        color: AppConstants.textSecondary,
+                        color: ThemeUtils.getSecondaryTextColor(context),
                       ),
                     ),
-                  ],
-                ),
-              ),
+              ],
+            ),
+          ),
               ElevatedButton.icon(
                 onPressed: () => _showTeamNotificationDialog(),
                 icon: Icon(Icons.add, size: 16),
                 label: Text('Add Team'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppConstants.vexIQGreen,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppConstants.spacingM,
                     vertical: AppConstants.spacingS,
                   ),
-                ),
-              ),
-            ],
+            ),
           ),
+        ],
+      ),
         ),
         
                 // Division selector header
@@ -1162,10 +1157,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           Container(
             padding: const EdgeInsets.all(AppConstants.spacingM),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -1216,34 +1211,34 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
 
   Widget _buildTournamentContent() {
     if (_selectedDivisionId == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-            Icon(
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
               Icons.schedule_outlined,
-              size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
-            ),
-            const SizedBox(height: AppConstants.spacingM),
-            Text(
+            size: 64,
+            color: ThemeUtils.getVeryMutedTextColor(context),
+          ),
+          const SizedBox(height: AppConstants.spacingM),
+          Text(
               'Select a Division',
-              style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
-              ),
+            style: AppConstants.headline6.copyWith(
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
-            const SizedBox(height: AppConstants.spacingS),
-            Text(
+          ),
+          const SizedBox(height: AppConstants.spacingS),
+          Text(
               'Choose a division to view match schedules',
-              style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
-              ),
-              textAlign: TextAlign.center,
+            style: AppConstants.bodyText2.copyWith(
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
-          ],
-        ),
-      );
-    }
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
 
     // Get matches for selected division
     final selectedMatches = _matchesByDivision[_selectedDivisionId] ?? [];
@@ -1256,20 +1251,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.schedule_outlined,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'No Matches Found',
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'No matches available for the selected division',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
           ),
@@ -1353,7 +1348,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     ? AppConstants.vexIQGreen.withOpacity(0.1)
                     : groupName.contains('Past')
                         ? AppConstants.vexIQOrange.withOpacity(0.1)
-                        : Colors.grey.withOpacity(0.1),
+                        : ThemeUtils.getVeryMutedTextColor(context, opacity: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -1368,7 +1363,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                         ? AppConstants.vexIQGreen
                         : groupName.contains('Past')
                             ? AppConstants.vexIQOrange
-                            : Colors.grey,
+                            : ThemeUtils.getSecondaryTextColor(context),
                   ),
                   const SizedBox(width: AppConstants.spacingS),
                   Expanded(
@@ -1380,14 +1375,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                             ? AppConstants.vexIQGreen
                             : groupName.contains('Past')
                                 ? AppConstants.vexIQOrange
-                                : Colors.grey,
+                                : ThemeUtils.getSecondaryTextColor(context),
                       ),
                     ),
                   ),
                   Text(
                     '${matchesForGroup.length} matches',
                     style: AppConstants.caption.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
                   ),
                 ],
@@ -1486,7 +1481,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
       color: isUpcoming ? AppConstants.vexIQGreen.withOpacity(0.1) : 
-             isPast ? AppConstants.textSecondary.withOpacity(0.1) : Colors.white,
+             isPast ? ThemeUtils.getVeryMutedTextColor(context, opacity: 0.1) : Theme.of(context).colorScheme.onPrimary,
       child: Padding(
         padding: const EdgeInsets.all(AppConstants.spacingM),
             child: Row(
@@ -1500,7 +1495,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     isUpcoming ? Icons.notification_important : 
                     isPast ? Icons.check_circle : Icons.schedule,
                     color: isUpcoming ? AppConstants.vexIQGreen : 
-                           isPast ? AppConstants.textSecondary : AppConstants.vexIQOrange,
+                           isPast ? ThemeUtils.getSecondaryTextColor(context) : AppConstants.vexIQOrange,
                     size: 20,
                   ),
                   const SizedBox(height: 4),
@@ -1508,7 +1503,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     timeString,
                     style: AppConstants.caption.copyWith(
                       color: isUpcoming ? AppConstants.vexIQGreen : 
-                             isPast ? AppConstants.textSecondary : AppConstants.vexIQOrange,
+                             isPast ? ThemeUtils.getSecondaryTextColor(context) : AppConstants.vexIQOrange,
                       fontWeight: FontWeight.bold,
                     ),
                     textAlign: TextAlign.center,
@@ -1566,7 +1561,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                         ),
                         decoration: BoxDecoration(
                           color: isUpcoming ? AppConstants.vexIQGreen.withOpacity(0.1) :
-                                 isPast ? AppConstants.textSecondary.withOpacity(0.1) :
+                                 isPast ? ThemeUtils.getVeryMutedTextColor(context, opacity: 0.1) :
                                  AppConstants.vexIQOrange.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -1574,7 +1569,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                           isUpcoming ? 'Upcoming' : isPast ? 'Completed' : 'Scheduled',
                           style: AppConstants.caption.copyWith(
                             color: isUpcoming ? AppConstants.vexIQGreen :
-                                   isPast ? AppConstants.textSecondary :
+                                   isPast ? ThemeUtils.getSecondaryTextColor(context) :
                                    AppConstants.vexIQOrange,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1585,8 +1580,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   
                   const SizedBox(height: AppConstants.spacingS),
                   
-                  // Alliances
-                  _buildAllianceRow(match),
+                  // Alliances  
+                  Column(
+                    children: (match['alliances'] as List<dynamic>? ?? [])
+                        .map((alliance) => _buildAllianceRow(alliance))
+                        .toList(),
+                  ),
                 ],
               ),
             ),
@@ -1737,76 +1736,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   // Rankings tab implementation (like VRC RoboScout)
-  Widget _buildRankingsTab() {
-    return Column(
-      children: [
-        // Division selector header
-        if (_divisions.isNotEmpty) 
-          Container(
-            padding: const EdgeInsets.all(AppConstants.spacingM),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.format_list_numbered, color: AppConstants.vexIQOrange),
-                const SizedBox(width: AppConstants.spacingS),
-                Text(
-                  'Division:',
-                  style: AppConstants.bodyText1.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: AppConstants.spacingS),
-                Expanded(
-                  child: DropdownButton<int>(
-                    value: _selectedDivisionId,
-                    isExpanded: true,
-                    hint: Text('Select Division'),
-                    items: _divisions.map<DropdownMenuItem<int>>((division) {
-                      final divisionId = division['id'] as int;
-                      final divisionName = division['name']?.toString() ?? 'Division ${division['order']?.toString() ?? ''}';
-                      final rankingCount = _rankingsByDivision[divisionId]?.length ?? 0;
-                      
-                      return DropdownMenuItem<int>(
-                        value: divisionId,
-                        child: Text('$divisionName ($rankingCount teams)'),
-                      );
-                    }).toList(),
-                    onChanged: (int? newDivisionId) {
-                      setState(() {
-                        _selectedDivisionId = newDivisionId;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        
-        // Rankings content
-        Expanded(
-          child: _buildRankingsContent(),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildRankingsContent() {
+  Widget _buildRankingsContentOld() {
     if (_rankingsError != null) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
               Icons.error_outline,
               size: 64,
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
@@ -1817,7 +1757,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Text(
               _rankingsError!,
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1834,59 +1774,59 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           children: [
             Icon(
               Icons.info_outline,
-            size: 64,
-            color: AppConstants.textSecondary.withOpacity(0.5),
-          ),
-          const SizedBox(height: AppConstants.spacingM),
-          Text(
+              size: 64,
+              color: ThemeUtils.getVeryMutedTextColor(context),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
               'No Divisions Found',
-            style: AppConstants.headline6.copyWith(
-              color: AppConstants.textSecondary,
+              style: AppConstants.headline6.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
             ),
-          ),
-          const SizedBox(height: AppConstants.spacingS),
-          Text(
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
               'This event does not have division information available',
-            style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
-            ),
+              style: AppConstants.bodyText2.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
             textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+            ),
+          ],
+        ),
+      );
+    }
 
     // No division selected
     if (_selectedDivisionId == null) {
       return Center(
-        child: Column(
+      child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+        children: [
             Icon(
               Icons.format_list_numbered_outlined,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'Select a Division',
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'Choose a division from the dropdown above to view rankings',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
+  }
 
     // Get rankings for selected division
     final selectedRankings = _rankingsByDivision[_selectedDivisionId] ?? [];
@@ -1899,20 +1839,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.format_list_numbered_outlined,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'No Rankings Found',
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
             const SizedBox(height: AppConstants.spacingS),
             Text(
               'No rankings available for the selected division',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1921,12 +1861,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       );
     }
 
+    // Sort rankings by rank (ascending order - 1st place first)
+    final sortedRankings = List<dynamic>.from(selectedRankings);
+    sortedRankings.sort((a, b) {
+      final rankA = a['rank'] ?? a['position'] ?? 999;
+      final rankB = b['rank'] ?? b['position'] ?? 999;
+      return rankA.compareTo(rankB);
+    });
+
     // Display rankings for selected division
     return ListView.builder(
       padding: const EdgeInsets.all(AppConstants.spacingM),
-      itemCount: selectedRankings.length,
+      itemCount: sortedRankings.length,
       itemBuilder: (context, index) {
-        return _buildRankingCard(selectedRankings[index], index + 1);
+        final ranking = sortedRankings[index];
+        final rank = ranking['rank'] ?? ranking['position'] ?? (index + 1);
+        return _buildRankingCard(ranking, rank);
       },
     );
   }
@@ -1957,11 +1907,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     final wp = ranking['wp'] ?? ranking['win_points'] ?? 0;
     final ap = ranking['ap'] ?? ranking['autonomous_points'] ?? 0;
     final sp = ranking['sp'] ?? ranking['strength_of_schedule'] ?? 0;
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacingM),
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+          child: Padding(
+            padding: const EdgeInsets.all(AppConstants.spacingM),
         child: Column(
           children: [
             // Main ranking row
@@ -1980,9 +1930,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                       '$rank',
                       style: AppConstants.bodyText1.copyWith(
                         color: _getRankColor(rank),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
                   ),
                 ),
                 const SizedBox(width: AppConstants.spacingM),
@@ -2002,15 +1952,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                         Text(
                           teamName,
                           style: AppConstants.bodyText2.copyWith(
-                            color: AppConstants.textSecondary,
+                            color: ThemeUtils.getSecondaryTextColor(context),
                           ),
                         ),
                       Text(
                         'W: $wins L: $losses T: $ties',
-                        style: AppConstants.caption.copyWith(
-                          color: AppConstants.textSecondary,
-                        ),
-                      ),
+                          style: AppConstants.caption.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+            ),
                     ],
                   ),
                 ),
@@ -2022,10 +1972,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     if (score > 0)
                       Text(
                         'Score: $score',
-                        style: AppConstants.bodyText1.copyWith(
-                          color: AppConstants.vexIQGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: AppConstants.bodyText1.copyWith(
+                      color: AppConstants.vexIQGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
                       ),
                     if (averageScore > 0)
                       Text(
@@ -2045,7 +1995,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                       Text(
                         'Matches: $totalMatches',
                         style: AppConstants.caption.copyWith(
-                          color: AppConstants.textSecondary,
+                          color: ThemeUtils.getSecondaryTextColor(context),
                         ),
                       ),
                   ],
@@ -2056,9 +2006,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             // Additional stats row with skills and teamwork data
             const SizedBox(height: AppConstants.spacingS),
             _buildTeamAdditionalStats(teamNumber),
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
     );
   }
 
@@ -2094,40 +2044,49 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           return SizedBox.shrink();
         }
         
-        return Container(
-          padding: const EdgeInsets.all(AppConstants.spacingS),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
-          ),
-          child: Row(
+        return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+        children: [
+            if (combinedSkills > 0) ...[
+          Row(
+                mainAxisSize: MainAxisSize.min,
             children: [
-              if (combinedSkills > 0) ...[
-                Icon(Icons.emoji_events, size: 16, color: AppConstants.vexIQOrange),
-                const SizedBox(width: 4),
-                Text(
-                  'Skills: $combinedSkills',
-                  style: AppConstants.caption.copyWith(
-                    color: AppConstants.vexIQOrange,
+                  Icon(Icons.emoji_events, size: 12, color: AppConstants.vexIQOrange),
+                  const SizedBox(width: 4),
+                  Flexible(
+                child: Text(
+                      'Skills: $combinedSkills',
+                      style: AppConstants.caption.copyWith(
+                        color: AppConstants.vexIQOrange,
                     fontWeight: FontWeight.w600,
                   ),
-                ),
-              ],
-              if (combinedSkills > 0 && avgTeamworkPoints > 0)
-                const SizedBox(width: AppConstants.spacingM),
-              if (avgTeamworkPoints > 0) ...[
-                Icon(Icons.group_work, size: 16, color: AppConstants.vexIQGreen),
-                const SizedBox(width: 4),
-                Text(
-                  'Teamwork Avg: ${avgTeamworkPoints.toStringAsFixed(1)}',
-                  style: AppConstants.caption.copyWith(
-                    color: AppConstants.vexIQGreen,
-                    fontWeight: FontWeight.w600,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (avgTeamworkPoints > 0) ...[
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.group_work, size: 12, color: AppConstants.vexIQGreen),
+                  const SizedBox(width: 4),
+                  Flexible(
+                  child: Text(
+                      'Team: ${avgTeamworkPoints.toStringAsFixed(1)}',
+                    style: AppConstants.caption.copyWith(
+                        color: AppConstants.vexIQGreen,
+                        fontWeight: FontWeight.w600,
+                    ),
+                      overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ],
             ],
           ),
+            ],
+          ],
         );
       },
     );
@@ -2215,18 +2174,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   // Results tab implementation (like Elapse app)
-  Widget _buildResultsTab() {
+  Widget _buildCombinedResultsTab() {
     return DefaultTabController(
       length: 2,
       child: Column(
-        children: [
+            children: [
           // Sub-tabs for Rankings and Awards (removed Skills to avoid duplication)
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -2234,20 +2193,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             ),
             child: TabBar(
               labelColor: AppConstants.vexIQOrange,
-              unselectedLabelColor: AppConstants.textSecondary,
+              unselectedLabelColor: ThemeUtils.getSecondaryTextColor(context, opacity: 0.6),
               indicatorColor: AppConstants.vexIQOrange,
               tabs: const [
                 Tab(text: 'Rankings', icon: Icon(Icons.format_list_numbered)),
+                Tab(text: 'Combined', icon: Icon(Icons.merge)),
+                Tab(text: 'Skills', icon: Icon(Icons.emoji_events)),
                 Tab(text: 'Awards', icon: Icon(Icons.emoji_events)),
               ],
             ),
           ),
           
           // Tab content
-          Expanded(
+              Expanded(
             child: TabBarView(
               children: [
                 _buildRankingsView(),
+                _buildCombinedRankingsView(),
+                _buildSkillsRankingsView(),
                 _buildAwardsView(),
               ],
             ),
@@ -2257,62 +2220,1339 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     );
   }
 
+
   Widget _buildRankingsView() {
-    return Column(
-      children: [
-        // Division selector for rankings (if multiple divisions)
-        if (_divisions.length > 1)
-          Container(
-            padding: const EdgeInsets.all(AppConstants.spacingM),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              border: Border(
-                bottom: BorderSide(color: Colors.grey[300]!, width: 1),
+    // Check for error state
+    if (_rankingsError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: ThemeUtils.getSecondaryTextColor(context),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
+              'Error Loading Rankings',
+              style: AppConstants.headline6,
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              _rankingsError!,
+            style: AppConstants.bodyText2.copyWith(
+              color: ThemeUtils.getSecondaryTextColor(context),
+            ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // No divisions available
+    if (_divisions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.info_outline,
+              size: 64,
+              color: ThemeUtils.getVeryMutedTextColor(context),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
+              'No Divisions Available',
+              style: AppConstants.headline6.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.group_work, color: AppConstants.vexIQBlue),
-                const SizedBox(width: AppConstants.spacingS),
-                Text(
-                  'Division:',
-                  style: AppConstants.bodyText1.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: AppConstants.spacingS),
-                Expanded(
-                  child: DropdownButton<int>(
-                    value: _selectedDivisionId,
-                    isExpanded: true,
-                    hint: Text('Select Division'),
-                    items: _divisions.map<DropdownMenuItem<int>>((division) {
-                      final divisionId = division['id'] as int;
-                      final divisionName = division['name'] ?? 'Division ${division['order'] ?? ''}';
-                      
-                      return DropdownMenuItem<int>(
-                        value: divisionId,
-                        child: Text(divisionName),
-                      );
-                    }).toList(),
-                    onChanged: (int? newDivisionId) {
-                      setState(() {
-                        _selectedDivisionId = newDivisionId;
-                      });
-                    },
-                  ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              'This event may not have divisions yet',
+              style: AppConstants.bodyText2.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // VEX Via-style division rankings with tabs for each division
+    return DefaultTabController(
+      length: _divisions.length,
+      child: Column(
+        children: [
+          // Division tabs (like VEX Via)
+          Container(
+                  decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.onPrimary,
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
+            child: TabBar(
+              isScrollable: true,
+              labelColor: AppConstants.vexIQOrange,
+              unselectedLabelColor: ThemeUtils.getSecondaryTextColor(context, opacity: 0.6),
+              indicatorColor: AppConstants.vexIQOrange,
+              onTap: (index) {
+                setState(() {
+                  _selectedDivisionId = _divisions[index]['id'] as int;
+                });
+              },
+              tabs: _divisions.map<Widget>((division) {
+                final divisionName = division['name']?.toString() ?? 'Division ${division['order']?.toString() ?? ''}';
+                final teamCount = _rankingsByDivision[division['id']]?.length ?? 0;
+                
+                return Tab(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        divisionName,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      Text(
+                        '$teamCount teams',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: ThemeUtils.getSecondaryTextColor(context),
+                  ),
+                ),
+            ],
+                  ),
+                );
+              }).toList(),
+            ),
           ),
+          
+          // Division rankings content
+          Expanded(
+            child: TabBarView(
+              children: _divisions.map<Widget>((division) {
+                final divisionId = division['id'] as int;
+                return _buildDivisionRankingsView(divisionId);
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivisionRankingsView(int divisionId) {
+    // Get rankings for this specific division
+    final selectedRankings = _rankingsByDivision[divisionId] ?? [];
+    
+    if (selectedRankings.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.format_list_numbered_outlined,
+              size: 64,
+              color: ThemeUtils.getVeryMutedTextColor(context),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
+              'No Rankings Found',
+              style: AppConstants.headline6.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              'No rankings available for this division yet',
+              style: AppConstants.bodyText2.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+        ],
+      ),
+    );
+  }
+  
+    // Sort rankings by rank (ascending order - 1st place first)
+    final sortedRankings = List<dynamic>.from(selectedRankings);
+    sortedRankings.sort((a, b) {
+      final rankA = a['rank'] ?? a['position'] ?? 999;
+      final rankB = b['rank'] ?? b['position'] ?? 999;
+      return rankA.compareTo(rankB);
+    });
+
+    return Column(
+        children: [
+        // Division header with team count and refresh button (like VEX Via)
+          Container(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          color: AppConstants.vexIQOrange.withOpacity(0.1),
+          child: Row(
+            children: [
+              Icon(
+                Icons.groups,
+                color: AppConstants.vexIQOrange,
+                size: 20,
+          ),
+          const SizedBox(width: AppConstants.spacingS),
+              Text(
+                '${sortedRankings.length} Teams',
+                style: AppConstants.bodyText1.copyWith(
+                  color: AppConstants.vexIQOrange,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () {
+                  _loadEventRankingsForAllDivisions();
+                },
+                icon: Icon(
+                  Icons.refresh,
+                  color: AppConstants.vexIQOrange,
+                  size: 20,
+                ),
+                tooltip: 'Refresh Rankings',
+              ),
+              Text(
+                'Division Rankings',
+                style: AppConstants.caption.copyWith(
+                  color: ThemeUtils.getSecondaryTextColor(context),
+                ),
+              ),
+            ],
+          ),
+        ),
         
-        // Rankings content
-        Expanded(
-          child: _buildRankingsContent(),
+        
+        // Rankings list
+          Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppConstants.spacingM),
+            itemCount: sortedRankings.length,
+            itemBuilder: (context, index) {
+              final ranking = sortedRankings[index];
+              final rank = ranking['rank'] ?? ranking['position'] ?? (index + 1);
+              return FutureBuilder<Widget>(
+                future: _buildDetailedRankingCard(ranking, rank),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return snapshot.data!;
+                  } else {
+                    return const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+          ),
         ),
       ],
     );
   }
 
 
+  Future<Widget> _buildDetailedRankingCard(dynamic ranking, int rank) async {
+    final teamData = ranking['team'];
+    
+    // Debug: Print the actual ranking data structure
+    print('🔍 VEX IQ Ranking Data Structure:');
+    print('  Keys: ${ranking.keys.toList()}');
+    print('  Full ranking: $ranking');
+    print('🔍 Team Data: $teamData');
+    if (teamData is Map) {
+      print('  Team keys: ${teamData.keys.toList()}');
+    }
+    final teamNumber = (teamData is Map) 
+        ? (teamData['name']?.toString() ?? 
+           teamData['number']?.toString() ?? 
+           'Unknown')
+        : 'Unknown';
+    
+    // Try multiple fields for team name, excluding the number field
+    String teamName = (teamData is Map) 
+        ? (teamData['team_name']?.toString() ?? 
+           teamData['robot_name']?.toString() ?? 
+           teamData['organization']?.toString() ?? 
+           teamData['nickname']?.toString() ?? 
+           teamData['display_name']?.toString() ?? 
+           '')
+        : '';
+    
+    // If no team name found in API data, try to find it in our cached team database
+    if (teamName.isEmpty) {
+      teamName = await _getTeamNameFromCache(teamNumber);
+      if (teamName.isEmpty) {
+        teamName = 'VEX IQ Team';
+      }
+    }
+    
+    // Debug: Print all ranking data fields
+    print('🔍 Ranking data fields: ${ranking.keys.toList()}');
+    print('🔍 Ranking values: $ranking');
+    
+    // VEX IQ rankings data - use correct field names from API
+    final wins = ranking['wins'] ?? 0;
+    final losses = ranking['losses'] ?? 0;
+    final ties = ranking['ties'] ?? 0;
+    final totalScore = ranking['total_points'] ?? 0;
+    final averageScore = ranking['average_points'] ?? 0.0;
+    final highScore = ranking['high_score'] ?? 0;
+    
+    // Calculate actual matches played from total points and average
+    // VEX IQ uses average scores, not win/loss records
+    final calculatedMatches = (averageScore > 0 && totalScore > 0) 
+        ? (totalScore / averageScore).round() 
+        : 0;
+    
+    // Use calculated matches if we have scores, otherwise use win/loss (which will be 0 for VEX IQ)
+    final totalMatches = calculatedMatches > 0 ? calculatedMatches : (wins + losses + ties);
+    
+    // Calculate average if we have total and matches but no average
+    final calculatedAverage = (totalMatches > 0 && ranking['total'] != null) 
+        ? (ranking['total'] / totalMatches).toDouble()
+        : averageScore;
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+      child: InkWell(
+                  onTap: () {
+          // Navigate to team details
+          _navigateToTeamDetails(teamNumber, teamName);
+                  },
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          child: Column(
+              children: [
+              // Main team info row
+              Row(
+                children: [
+                  // Rank badge
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _getRankColor(rank).withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                    child: Text(
+                        '$rank',
+                        style: AppConstants.bodyText1.copyWith(
+                          color: _getRankColor(rank),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacingM),
+                  
+                  // Team info
+                Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                      teamNumber,
+                          style: AppConstants.bodyText1.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          teamName.isNotEmpty ? teamName : 'VEX IQ Team',
+                          style: AppConstants.bodyText2.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                        ),
+                        Text(
+                          '${totalMatches} matches',
+                      style: AppConstants.caption.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Favorite star
+                  Consumer<UserSettings>(
+                    builder: (context, settings, child) {
+                      final isFavorite = settings.isFavoriteTeam(teamNumber);
+                      return IconButton(
+                        onPressed: () {
+                          if (isFavorite) {
+                            settings.removeFavoriteTeam(teamNumber);
+                          } else {
+                            settings.addFavoriteTeam(teamNumber);
+                          }
+                        },
+                        icon: Icon(
+                          isFavorite ? Icons.star : Icons.star_border,
+                          color: isFavorite ? Colors.amber : Theme.of(context).iconTheme.color,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: AppConstants.spacingS),
+              
+              // Detailed stats row (like RoboScout)
+            Container(
+                padding: const EdgeInsets.all(AppConstants.spacingS),
+              decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+              ),
+                child: Column(
+                  children: [
+                    // First row: Basic stats
+                    Row(
+                      children: [
+                        // Column 1: Basic stats
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                                            children: [
+                          Text(
+                            'Avg: ${calculatedAverage.toStringAsFixed(1)}',
+                style: AppConstants.caption.copyWith(
+                  color: AppConstants.vexIQGreen,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'High: $highScore',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQBlue,
+                            ),
+                          ),
+                          Text(
+                            'Matches: $totalMatches',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQOrange,
+              ),
+            ),
+        ],
+            ),
+          ),
+        
+                        // Column 2: Match stats
+        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                          Text(
+                            'Rank: $rank',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Division: ${_getDivisionName(_selectedDivisionId ?? 0)}',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Status: ${totalMatches > 0 ? 'Active' : 'Pending'}',
+                            style: AppConstants.caption.copyWith(
+                              color: totalMatches > 0 ? AppConstants.vexIQGreen : AppConstants.vexIQOrange,
+                            ),
+                          ),
+                        ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: AppConstants.spacingS),
+                    
+                    // Second row: Skills and teamwork stats
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTeamAdditionalStats(teamNumber),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  String _getDivisionName(int divisionId) {
+    final division = _divisions.firstWhere(
+      (d) => d['id'] == divisionId,
+      orElse: () => {'name': 'Unknown Division'},
+    );
+    return division['name']?.toString() ?? 'Unknown Division';
+  }
+
+  void _shareEvent() {
+    // Generate RobotEvents URL using the event's SKU code
+    // Format: https://www.robotevents.com/robot-competitions/vex-iq-competition/{SKU}.html#general-info
+    final robotEventsUrl = 'https://www.robotevents.com/robot-competitions/vex-iq-competition/${widget.event.sku}.html#general-info';
+    
+    // Format the start date
+    final startDate = widget.event.start != null 
+        ? widget.event.start!.toString().split(' ')[0]
+        : 'TBD';
+    
+    // Create share text with event details
+    final shareText = 'Check out this VEX IQ event: ${widget.event.name}\n\n'
+        '📅 $startDate\n'
+        '📍 ${widget.event.location}\n'
+        '🔗 $robotEventsUrl\n\n'
+        'Shared via StatIQ App';
+    
+    // Use the native share menu
+    Share.share(
+      shareText,
+      subject: 'VEX IQ Event: ${widget.event.name}',
+    );
+  }
+
+  Future<String> _getTeamNameFromCache(String teamNumber) async {
+    try {
+      // Search in our cached team database using OptimizedTeamSearch
+      final searchResults = OptimizedTeamSearch.search(teamNumber);
+      if (searchResults.isNotEmpty) {
+        // Find exact match
+        for (final teamData in searchResults) {
+          final cachedTeamNumber = (teamData['number'] ?? '').toString();
+          if (cachedTeamNumber.toLowerCase() == teamNumber.toLowerCase()) {
+            final teamName = (teamData['name'] ?? '').toString();
+            if (teamName.isNotEmpty) {
+              print('✅ Found team name in cache: $teamNumber -> $teamName');
+              return teamName;
+            }
+          }
+        }
+      }
+      print('⚠️ No team name found in cache for $teamNumber');
+      } catch (e) {
+      print('❌ Error searching cached team database for $teamNumber: $e');
+    }
+    return '';
+  }
+
+  Future<Team?> _getFullTeamDataFromCache(String teamNumber) async {
+    try {
+      // Search in our cached team database using OptimizedTeamSearch
+      final searchResults = OptimizedTeamSearch.search(teamNumber);
+      if (searchResults.isNotEmpty) {
+        // Find exact match
+        for (final teamData in searchResults) {
+          final cachedTeamNumber = (teamData['number'] ?? '').toString();
+          if (cachedTeamNumber.toLowerCase() == teamNumber.toLowerCase()) {
+            print('✅ Found full team data in cache for $teamNumber');
+            return Team(
+              id: teamData['id'] ?? 0,
+              number: teamData['number'] ?? '',
+              name: teamData['name'] ?? '',
+              robotName: teamData['robotName'] ?? '',
+              organization: teamData['organization'] ?? '',
+              city: teamData['city'] ?? '',
+              region: teamData['region'] ?? '',
+              country: teamData['country'] ?? '',
+              grade: teamData['grade'] ?? '',
+              registered: true,
+            );
+          }
+        }
+      }
+      print('⚠️ No full team data found in cache for $teamNumber');
+      } catch (e) {
+      print('❌ Error searching cached team database for $teamNumber: $e');
+    }
+    return null;
+  }
+
+  Future<void> _navigateToTeamDetails(String teamNumber, String teamName) async {
+    try {
+      // First try to get full team data from cache
+      final cachedTeam = await _getFullTeamDataFromCache(teamNumber);
+      
+      if (cachedTeam != null) {
+        // Use cached team data with event context (Bug Patch 3 requirement)
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TeamDetailsScreen(
+              team: cachedTeam,
+              eventId: widget.event.id, // Pass event ID to filter matches
+            ),
+          ),
+        );
+      } else {
+        // Fallback: create minimal team object and let TeamDetailsScreen fetch data
+        final fallbackTeam = Team(
+          id: 0, // Will be fetched by TeamDetailsScreen
+          number: teamNumber,
+          name: teamName,
+          robotName: '',
+          organization: '',
+          city: '',
+          region: '',
+          country: '',
+          grade: '',
+          registered: true,
+        );
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TeamDetailsScreen(
+              team: fallbackTeam,
+              eventId: widget.event.id, // Pass event ID to filter matches
+            ),
+          ),
+        );
+      }
+      } catch (e) {
+      print('❌ Error navigating to team details: $e');
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading team details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildCombinedRankingsView() {
+    // Combine all rankings from all divisions
+    List<dynamic> allRankings = [];
+    for (final division in _divisions) {
+      final divisionId = division['id'] as int;
+      final divisionRankings = _rankingsByDivision[divisionId] ?? [];
+      
+      // Add division info to each ranking
+      for (final ranking in divisionRankings) {
+        final rankingWithDivision = Map<String, dynamic>.from(ranking);
+        rankingWithDivision['division_name'] = division['name']?.toString() ?? 'Unknown Division';
+        rankingWithDivision['division_id'] = divisionId;
+        allRankings.add(rankingWithDivision);
+      }
+    }
+    
+    if (allRankings.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.merge,
+              size: 64,
+              color: ThemeUtils.getVeryMutedTextColor(context),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
+              'No Combined Rankings',
+              style: AppConstants.headline6.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              'No rankings available across all divisions',
+              style: AppConstants.bodyText2.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Sort by rank across all divisions
+    allRankings.sort((a, b) {
+      final rankA = a['rank'] ?? a['position'] ?? 999;
+      final rankB = b['rank'] ?? b['position'] ?? 999;
+      return rankA.compareTo(rankB);
+    });
+    
+    return Column(
+      children: [
+        // Combined rankings header
+        Container(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          color: AppConstants.vexIQBlue.withOpacity(0.1),
+          child: Row(
+            children: [
+              Icon(
+                Icons.merge,
+                color: AppConstants.vexIQBlue,
+                size: 20,
+              ),
+              const SizedBox(width: AppConstants.spacingS),
+              Text(
+                '${allRankings.length} Teams (All Divisions)',
+                style: AppConstants.bodyText1.copyWith(
+                  color: AppConstants.vexIQBlue,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () {
+                  _loadEventRankingsForAllDivisions();
+                },
+                icon: Icon(
+                  Icons.refresh,
+                  color: AppConstants.vexIQBlue,
+                  size: 20,
+                ),
+                tooltip: 'Refresh Rankings',
+              ),
+              Text(
+                'Combined Rankings',
+                style: AppConstants.caption.copyWith(
+                  color: ThemeUtils.getSecondaryTextColor(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Combined rankings list
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppConstants.spacingM),
+            itemCount: allRankings.length,
+            itemBuilder: (context, index) {
+              final ranking = allRankings[index];
+              final rank = ranking['rank'] ?? ranking['position'] ?? (index + 1);
+              return FutureBuilder<Widget>(
+                future: _buildCombinedRankingCard(ranking, rank),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return snapshot.data!;
+                  } else {
+                    return const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<Widget> _buildCombinedRankingCard(dynamic ranking, int rank) async {
+    final teamData = ranking['team'];
+    final teamNumber = (teamData is Map) 
+        ? (teamData['name']?.toString() ?? 
+           teamData['number']?.toString() ?? 
+           'Unknown')
+        : 'Unknown';
+    
+    // Try multiple fields for team name, excluding the number field
+    String teamName = (teamData is Map) 
+        ? (teamData['team_name']?.toString() ?? 
+           teamData['robot_name']?.toString() ?? 
+           teamData['organization']?.toString() ?? 
+           teamData['nickname']?.toString() ?? 
+           teamData['display_name']?.toString() ?? 
+           '')
+        : '';
+    
+    // If no team name found in API data, try to find it in our cached team database
+    if (teamName.isEmpty) {
+      teamName = await _getTeamNameFromCache(teamNumber);
+      if (teamName.isEmpty) {
+        teamName = 'VEX IQ Team';
+      }
+    }
+    
+    // VEX IQ rankings data - use correct field names from API
+    final wins = ranking['wins'] ?? 0;
+    final losses = ranking['losses'] ?? 0;
+    final ties = ranking['ties'] ?? 0;
+    final totalScore = ranking['total_points'] ?? 0;
+    final averageScore = ranking['average_points'] ?? 0.0;
+    final highScore = ranking['high_score'] ?? 0;
+    
+    // Calculate actual matches played from total points and average
+    // VEX IQ uses average scores, not win/loss records
+    final calculatedMatches = (averageScore > 0 && totalScore > 0) 
+        ? (totalScore / averageScore).round() 
+        : 0;
+    
+    // Use calculated matches if we have scores, otherwise use win/loss (which will be 0 for VEX IQ)
+    final totalMatches = calculatedMatches > 0 ? calculatedMatches : (wins + losses + ties);
+    
+    // Calculate average if we have total and matches but no average
+    final calculatedAverage = (totalMatches > 0 && ranking['total'] != null) 
+        ? (ranking['total'] / totalMatches).toDouble()
+        : averageScore;
+    
+    final divisionName = ranking['division_name'] ?? 'Unknown Division';
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+      child: InkWell(
+        onTap: () {
+          // Navigate to team details
+          _navigateToTeamDetails(teamNumber, teamName);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          child: Column(
+            children: [
+              // Main team info row
+              Row(
+                children: [
+                  // Rank badge
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _getRankColor(rank).withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$rank',
+                        style: AppConstants.bodyText1.copyWith(
+                          color: _getRankColor(rank),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacingM),
+                  
+                  // Team info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          teamNumber,
+                          style: AppConstants.bodyText1.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          teamName.isNotEmpty ? teamName : 'VEX IQ Team',
+                          style: AppConstants.bodyText2.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                        ),
+                        Text(
+                          '$divisionName • ${totalMatches} matches',
+                          style: AppConstants.caption.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Favorite star
+                  Consumer<UserSettings>(
+                    builder: (context, settings, child) {
+                      final isFavorite = settings.isFavoriteTeam(teamNumber);
+                      return IconButton(
+                        onPressed: () {
+                          if (isFavorite) {
+                            settings.removeFavoriteTeam(teamNumber);
+                          } else {
+                            settings.addFavoriteTeam(teamNumber);
+                          }
+                        },
+                        icon: Icon(
+                          isFavorite ? Icons.star : Icons.star_border,
+                          color: isFavorite ? Colors.amber : Theme.of(context).iconTheme.color,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: AppConstants.spacingS),
+              
+              // Stats row
+              Container(
+                padding: const EdgeInsets.all(AppConstants.spacingS),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+                ),
+                child: Row(
+                  children: [
+                    // Column 1: Basic stats
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Avg: ${calculatedAverage.toStringAsFixed(1)}',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQGreen,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'High: $highScore',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQBlue,
+                            ),
+                          ),
+                          Text(
+                            'Matches: $totalMatches',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Column 2: Division and status
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rank: $rank',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Division: $divisionName',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Status: ${totalMatches > 0 ? 'Active' : 'Pending'}',
+                            style: AppConstants.caption.copyWith(
+                              color: totalMatches > 0 ? AppConstants.vexIQGreen : AppConstants.vexIQOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Column 3: Skills and teamwork
+                    Expanded(
+                      child: _buildTeamAdditionalStats(teamNumber),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSkillsRankingsView() {
+    if (_isLoadingSkills) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_skillsError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: ThemeUtils.getSecondaryTextColor(context),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
+              'Error Loading Skills',
+              style: AppConstants.headline6,
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              _skillsError!,
+              style: AppConstants.bodyText2.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_skills.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.emoji_events,
+              size: 64,
+              color: ThemeUtils.getVeryMutedTextColor(context),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
+              'No Skills Data',
+              style: AppConstants.headline6.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              'No skills rankings available for this event',
+              style: AppConstants.bodyText2.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Group skills by team and calculate combined scores
+    final Map<String, Map<String, dynamic>> teamSkillsMap = {};
+    
+    for (final skill in _skills) {
+      final teamData = skill['team'];
+      final teamNumber = (teamData is Map) 
+          ? (teamData['name']?.toString() ?? teamData['number']?.toString() ?? '')
+          : '';
+      
+      if (teamNumber.isNotEmpty) {
+        if (!teamSkillsMap.containsKey(teamNumber)) {
+          teamSkillsMap[teamNumber] = {
+            'team': teamData,
+            'driver': 0,
+            'programming': 0,
+            'combined': 0,
+          };
+        }
+        
+        final skillType = skill['type']?.toString() ?? '';
+        final score = skill['scores']?['score'] ?? skill['score'] ?? 0;
+        
+        if (skillType == 'driver') {
+          teamSkillsMap[teamNumber]!['driver'] = score;
+        } else if (skillType == 'programming') {
+          teamSkillsMap[teamNumber]!['programming'] = score;
+        }
+      }
+    }
+    
+    // Calculate combined scores and create sorted list
+    final List<Map<String, dynamic>> sortedSkills = [];
+    for (final entry in teamSkillsMap.entries) {
+      final teamData = entry.value;
+      final combined = (teamData['driver'] as int) + (teamData['programming'] as int);
+      teamData['combined'] = combined;
+      sortedSkills.add(teamData);
+    }
+    
+    // Sort by combined score (highest first)
+    sortedSkills.sort((a, b) {
+      final scoreA = a['combined'] ?? 0;
+      final scoreB = b['combined'] ?? 0;
+      return scoreB.compareTo(scoreA);
+    });
+
+    return Column(
+        children: [
+        // Skills header
+          Container(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          color: AppConstants.vexIQGreen.withOpacity(0.1),
+          child: Row(
+            children: [
+              Icon(
+                Icons.emoji_events,
+                color: AppConstants.vexIQGreen,
+                size: 20,
+              ),
+              const SizedBox(width: AppConstants.spacingS),
+              Text(
+                '${sortedSkills.length} Teams',
+                style: AppConstants.bodyText1.copyWith(
+                  color: AppConstants.vexIQGreen,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () {
+                  _loadEventSkills();
+                },
+                icon: Icon(
+                  Icons.refresh,
+                  color: AppConstants.vexIQGreen,
+                  size: 20,
+                ),
+                tooltip: 'Refresh Skills',
+              ),
+              Text(
+                'Skills Rankings',
+                style: AppConstants.caption.copyWith(
+                  color: ThemeUtils.getSecondaryTextColor(context),
+                ),
+              ),
+              ],
+            ),
+          ),
+        
+        // Skills rankings list
+          Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppConstants.spacingM),
+            itemCount: sortedSkills.length,
+            itemBuilder: (context, index) {
+              final skill = sortedSkills[index];
+              final rank = index + 1;
+              return FutureBuilder<Widget>(
+                future: _buildSkillsRankingCard(skill, rank),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return snapshot.data!;
+                  } else {
+                    return const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+            ),
+          ),
+        ],
+    );
+  }
+
+  Future<Widget> _buildSkillsRankingCard(Map<String, dynamic> teamSkillData, int rank) async {
+    final teamData = teamSkillData['team'];
+    final teamNumber = (teamData is Map) 
+        ? (teamData['name']?.toString() ?? 
+           teamData['number']?.toString() ?? 
+           'Unknown')
+        : 'Unknown';
+    
+    // Try multiple fields for team name
+    String teamName = (teamData is Map) 
+        ? (teamData['team_name']?.toString() ?? 
+           teamData['robot_name']?.toString() ?? 
+           teamData['organization']?.toString() ?? 
+           teamData['nickname']?.toString() ?? 
+           teamData['display_name']?.toString() ?? 
+           '')
+        : '';
+    
+    // If no team name found in API data, try to find it in our cached team database
+    if (teamName.isEmpty) {
+      teamName = await _getTeamNameFromCache(teamNumber);
+      if (teamName.isEmpty) {
+        teamName = 'VEX IQ Team';
+      }
+    }
+    
+    // Get pre-calculated scores
+    final combinedScore = teamSkillData['combined'] ?? 0;
+    final driverScore = teamSkillData['driver'] ?? 0;
+    final programmingScore = teamSkillData['programming'] ?? 0;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+      child: InkWell(
+        onTap: () {
+          // Navigate to team details
+          _navigateToTeamDetails(teamNumber, teamName);
+        },
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingM),
+          child: Column(
+          children: [
+              // Main team info row
+              Row(
+                children: [
+                  // Rank badge
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                      color: _getRankColor(rank).withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                        '$rank',
+                  style: AppConstants.bodyText1.copyWith(
+                          color: _getRankColor(rank),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacingM),
+                  
+                  // Team info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    teamNumber,
+                    style: AppConstants.bodyText1.copyWith(
+                      fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          teamName.isNotEmpty ? teamName : 'VEX IQ Team',
+                          style: AppConstants.bodyText2.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                        ),
+                        Text(
+                          'Skills Rank #$rank',
+                          style: AppConstants.caption.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Favorite star
+                  Consumer<UserSettings>(
+                    builder: (context, settings, child) {
+                      final isFavorite = settings.isFavoriteTeam(teamNumber);
+                      return IconButton(
+                        onPressed: () {
+                          if (isFavorite) {
+                            settings.removeFavoriteTeam(teamNumber);
+                          } else {
+                            settings.addFavoriteTeam(teamNumber);
+                          }
+                        },
+                        icon: Icon(
+                          isFavorite ? Icons.star : Icons.star_border,
+                          color: isFavorite ? Colors.amber : Theme.of(context).iconTheme.color,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: AppConstants.spacingS),
+              
+              // Skills scores row
+              Container(
+                padding: const EdgeInsets.all(AppConstants.spacingS),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+                ),
+                child: Row(
+                    children: [
+                    // Column 1: Combined score
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Combined: $combinedScore',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQGreen,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Driver: $driverScore',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQBlue,
+                            ),
+                          ),
+                          Text(
+                            'Programming: $programmingScore',
+                            style: AppConstants.caption.copyWith(
+                              color: AppConstants.vexIQOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Column 2: Skills breakdown
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Skills Rank: $rank',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Total Teams: ${_skills.length}',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Percentile: ${((_skills.length - rank + 1) / _skills.length * 100).toStringAsFixed(1)}%',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                  ),
+                ],
+              ),
+            ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildAwardsView() {
     if (_isLoadingAwards) {
@@ -2324,10 +3564,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+              Icon(
               Icons.error_outline,
               size: 64,
-              color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
@@ -2338,12 +3578,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Text(
               _awardsError!,
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
           ],
-        ),
+          ),
       );
     }
 
@@ -2355,26 +3595,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.emoji_events_outlined,
             size: 64,
-            color: AppConstants.textSecondary.withOpacity(0.5),
+            color: ThemeUtils.getVeryMutedTextColor(context),
           ),
           const SizedBox(height: AppConstants.spacingM),
           Text(
               'No Awards Available',
             style: AppConstants.headline6.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingS),
           Text(
               'Awards will appear here once available',
             style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
         ],
       ),
-      );
-    }
+    );
+  }
 
     return ListView.builder(
       padding: const EdgeInsets.all(AppConstants.spacingM),
@@ -2383,11 +3623,28 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         final award = _awards[index];
         
         // Safe type conversion for award data
-        final awardName = award['title']?.toString() ?? 'Unknown Award';
+        final awardName = award['title']?.toString() ?? 
+                         award['name']?.toString() ?? 
+                         award['award']?.toString() ?? 
+                         'Unknown Award';
         final awardOrder = award['order']?.toString() ?? '';
-        final teamData = award['team'];
+        // Awards have team data in teamWinners array
+        final teamWinners = award['teamWinners'] as List<dynamic>? ?? [];
+        final teamData = teamWinners.isNotEmpty ? teamWinners[0]['team'] : null;
+        
+        // Debug: Print award data structure
+        print('🔍 Award data: $award');
+        print('🔍 Team winners: $teamWinners');
+        print('🔍 Team data in award: $teamData');
+        if (teamData is Map) {
+          print('🔍 Team data keys: ${teamData.keys.toList()}');
+        }
+        
         final teamNumber = (teamData is Map) 
-            ? (teamData['name']?.toString() ?? 'Unknown Team')
+            ? (teamData['name']?.toString() ?? 
+               teamData['number']?.toString() ?? 
+               teamData['team_number']?.toString() ?? 
+               'Unknown Team')
             : 'Unknown Team';
 
         return Card(
@@ -2434,25 +3691,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   ),
                 ),
                 
-                // Award order/rank
-                if (awardOrder.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacingS,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppConstants.vexIQGreen.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
-                    ),
-                    child: Text(
-                      awardOrder,
-                      style: AppConstants.caption.copyWith(
-                        color: AppConstants.vexIQGreen,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -2461,120 +3699,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     );
   }
 
-  Widget _buildSkillsRankingsView() {
-    if (_isLoadingSkills) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_skillsError != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: AppConstants.textSecondary,
-            ),
-            const SizedBox(height: AppConstants.spacingM),
-            Text(
-              'Error Loading Skills',
-              style: AppConstants.headline6,
-            ),
-            const SizedBox(height: AppConstants.spacingS),
-            Text(
-              _skillsError!,
-              style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_skills.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.emoji_events_outlined,
-              size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
-            ),
-            const SizedBox(height: AppConstants.spacingM),
-            Text(
-              'No Skills Records',
-              style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacingS),
-            Text(
-              'Skills rankings will appear here once available',
-              style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Group skills by type and sort by score with proper type handling
-    final driverSkills = _skills
-        .where((skill) => skill['type'] == 'driver')
-        .toList()
-      ..sort((a, b) {
-        final scoreA = (a['score'] is int) ? a['score'] as int : int.tryParse(a['score']?.toString() ?? '0') ?? 0;
-        final scoreB = (b['score'] is int) ? b['score'] as int : int.tryParse(b['score']?.toString() ?? '0') ?? 0;
-        return scoreB.compareTo(scoreA);
-      });
-    
-    final autonomousSkills = _skills
-        .where((skill) => skill['type'] == 'programming')
-        .toList()
-      ..sort((a, b) {
-        final scoreA = (a['score'] is int) ? a['score'] as int : int.tryParse(a['score']?.toString() ?? '0') ?? 0;
-        final scoreB = (b['score'] is int) ? b['score'] as int : int.tryParse(b['score']?.toString() ?? '0') ?? 0;
-        return scoreB.compareTo(scoreA);
-      });
-
-    return DefaultTabController(
-      length: 2,
-      child: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              border: Border(
-                bottom: BorderSide(color: Colors.grey[300]!, width: 1),
-              ),
-            ),
-            child: TabBar(
-              labelColor: AppConstants.vexIQGreen,
-              unselectedLabelColor: AppConstants.textSecondary,
-              indicatorColor: AppConstants.vexIQGreen,
-              tabs: [
-                Tab(text: 'Driver Skills (${driverSkills.length})'),
-                Tab(text: 'Autonomous Skills (${autonomousSkills.length})'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _buildSkillsListView(driverSkills, 'Driver Skills'),
-                _buildSkillsListView(autonomousSkills, 'Autonomous Skills'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSkillsListView(List<dynamic> skills, String skillType) {
     if (skills.isEmpty) {
@@ -2585,13 +3709,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Icon(
               Icons.emoji_events_outlined,
               size: 48,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               'No $skillType Records',
               style: AppConstants.bodyText1.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -2617,8 +3741,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               ),
             ),
           ),
-          child: Row(
-            children: [
+        child: Row(
+          children: [
               SizedBox(
                 width: 50,
                     child: Text(
@@ -2694,12 +3818,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                       ? int.tryParse(attemptsData) ?? 0 
                       : 0;
 
-              return Container(
-                  padding: const EdgeInsets.symmetric(
+    return Container(
+      padding: const EdgeInsets.symmetric(
                   horizontal: AppConstants.spacingM,
                   vertical: AppConstants.spacingS,
-                  ),
-                  decoration: BoxDecoration(
+      ),
+      decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
                       color: AppConstants.borderColor.withOpacity(0.3),
@@ -2720,22 +3844,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                               rank == 2 ? Icons.emoji_events : 
                               Icons.emoji_events,
                               size: 16,
-                              color: _getRankColor(rank),
+                color: _getRankColor(rank),
                             ),
                             const SizedBox(width: 4),
                           ],
                           Text(
                             '$rank',
                             style: AppConstants.bodyText2.copyWith(
-                              fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                               color: _getRankColor(rank),
-                            ),
-                          ),
+                  ),
+                ),
                         ],
-                      ),
-                    ),
+              ),
+            ),
                     // Team number
-                    Expanded(
+            Expanded(
                       flex: 2,
                   child: Text(
                         teamNumber,
@@ -2762,7 +3886,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                       child: Text(
                         '$attempts',
                         style: AppConstants.bodyText2.copyWith(
-                          color: AppConstants.textSecondary,
+                          color: ThemeUtils.getSecondaryTextColor(context),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -2875,7 +3999,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return 800;
   }
 
-  Widget _buildMatchCard(dynamic match) {
+  int _getWorldSkillsCombinedPts() {
+    if (_skills.isEmpty) return 0;
+    
+    // Find the best combined skills score
+    int bestScore = 0;
+    for (final skill in _skills) {
+      final score = (skill['score'] is int) ? skill['score'] as int : int.tryParse(skill['score']?.toString() ?? '0') ?? 0;
+      if (score > bestScore) {
+        bestScore = score;
+      }
+    }
+    
+    return bestScore;
+  }
+
+  Widget _buildMatchCard(BuildContext context, dynamic match) {
     final matchName = match['name']?.toString() ?? 'Unknown Match';
     final round = match['round']?.toString() ?? 'Unknown Round';
     final field = match['field']?.toString() ?? '';
@@ -2893,7 +4032,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       ),
       padding: const EdgeInsets.all(AppConstants.spacingM),
       decoration: BoxDecoration(
-        color: AppConstants.vexIQBlue.withOpacity(0.05),
+        color: Theme.of(context).brightness == Brightness.dark 
+            ? Colors.grey[800]!.withOpacity(0.3)  // Light grey in dark mode
+            : AppConstants.vexIQBlue.withOpacity(0.05),  // Light blue in light mode
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
         border: Border.all(
           color: AppConstants.vexIQBlue.withOpacity(0.2),
@@ -2901,7 +4042,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Match header with name and field
           Row(
@@ -2909,8 +4050,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               Expanded(
                 child: Text(
                   matchName,
-                  style: AppConstants.bodyText1.copyWith(
-                    fontWeight: FontWeight.w600,
+                    style: AppConstants.bodyText1.copyWith(
+                      fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -2926,24 +4067,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   ),
                   child: Text(
                     'Field $field',
-                    style: AppConstants.caption.copyWith(
+            style: AppConstants.caption.copyWith(
                       color: AppConstants.vexIQOrange,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
                 ),
             ],
           ),
           const SizedBox(height: AppConstants.spacingXS),
           
           // Round and time information
-          Row(
-            children: [
+                  Row(
+                    children: [
               Expanded(
                 child: Text(
             round,
             style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
               ),
@@ -2959,7 +4100,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   ),
                   child: Text(
                     _getMatchTimeDisplay(scheduledTime, startedTime, finishedTime),
-                    style: AppConstants.caption.copyWith(
+            style: AppConstants.caption.copyWith(
                       color: _getMatchStatusColor(startedTime, finishedTime),
                       fontWeight: FontWeight.w600,
                     ),
@@ -2977,7 +4118,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       ),
     );
   }
-  
+
   Widget _buildAllianceRow(dynamic alliance) {
     final color = alliance['color']?.toString() ?? '';
     final teams = alliance['teams'] as List<dynamic>? ?? [];
@@ -2995,7 +4136,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             decoration: BoxDecoration(
               color: color.toLowerCase() == 'red' ? Colors.red : 
                      color.toLowerCase() == 'blue' ? Colors.blue : 
-                     AppConstants.textSecondary,
+                     ThemeUtils.getSecondaryTextColor(context),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -3010,18 +4151,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                 final teamNumber = (teamDataMap is Map) 
                     ? (teamDataMap['name']?.toString() ?? 'Unknown')
                     : 'Unknown';
-                return Container(
-                    padding: const EdgeInsets.symmetric(
+    return Container(
+      padding: const EdgeInsets.symmetric(
                       horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
                     color: AppConstants.vexIQBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
                     ),
                     child: Text(
                       teamNumber,
-                      style: AppConstants.caption.copyWith(
+            style: AppConstants.caption.copyWith(
                       color: AppConstants.vexIQBlue,
                       fontWeight: FontWeight.w600,
                     ),
@@ -3044,17 +4185,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               ),
               child: Text(
                 score.toString(),
-                style: AppConstants.caption.copyWith(
+            style: AppConstants.caption.copyWith(
                   color: AppConstants.vexIQGreen,
                   fontWeight: FontWeight.bold,
-                ),
-              ),
             ),
+              ),
+          ),
         ],
       ),
     );
   }
-  
+
   Color _getMatchStatusColor(String? startedTime, String? finishedTime) {
     if (finishedTime != null) return AppConstants.vexIQGreen; // Completed
     if (startedTime != null) return AppConstants.vexIQOrange; // In Progress
@@ -3116,7 +4257,7 @@ class DivisionMatchesScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(divisionName),
         backgroundColor: AppConstants.vexIQBlue,
-        foregroundColor: Colors.white,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
       body: matches.isEmpty
           ? Center(
@@ -3126,20 +4267,20 @@ class DivisionMatchesScreen extends StatelessWidget {
                   Icon(
                     Icons.sports_esports_outlined,
                     size: 64,
-                    color: AppConstants.textSecondary.withOpacity(0.5),
+                    color: ThemeUtils.getVeryMutedTextColor(context),
                   ),
                   const SizedBox(height: AppConstants.spacingM),
                   Text(
                     'No Matches Found',
                     style: AppConstants.headline6.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
                   ),
                   const SizedBox(height: AppConstants.spacingS),
                   Text(
                     'Matches will appear here once they are scheduled',
                     style: AppConstants.bodyText2.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
                   ),
                 ],
@@ -3149,13 +4290,13 @@ class DivisionMatchesScreen extends StatelessWidget {
               padding: const EdgeInsets.all(AppConstants.spacingM),
               itemCount: matches.length,
               itemBuilder: (context, index) {
-                return _buildMatchCard(matches[index]);
+                return _buildMatchCard(context, matches[index]);
               },
             ),
     );
   }
 
-  Widget _buildMatchCard(dynamic match) {
+  Widget _buildMatchCard(BuildContext context, dynamic match) {
     final matchName = match['name']?.toString() ?? 'Unknown Match';
     final round = match['round']?.toString() ?? 'Unknown Round';
     final field = match['field']?.toString() ?? '';
@@ -3173,7 +4314,9 @@ class DivisionMatchesScreen extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(AppConstants.spacingM),
       decoration: BoxDecoration(
-        color: AppConstants.vexIQBlue.withOpacity(0.05),
+        color: Theme.of(context).brightness == Brightness.dark 
+            ? Colors.grey[800]!.withOpacity(0.3)  // Light grey in dark mode
+            : AppConstants.vexIQBlue.withOpacity(0.05),  // Light blue in light mode
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
         border: Border.all(
           color: AppConstants.vexIQBlue.withOpacity(0.2),
@@ -3223,7 +4366,7 @@ class DivisionMatchesScreen extends StatelessWidget {
                 child: Text(
                   round,
                   style: AppConstants.bodyText2.copyWith(
-                    color: AppConstants.textSecondary,
+                    color: ThemeUtils.getSecondaryTextColor(context),
                   ),
                 ),
               ),
@@ -3251,14 +4394,14 @@ class DivisionMatchesScreen extends StatelessWidget {
           // Teams in alliances (if available)
           if (alliances.isNotEmpty) ...[
             const SizedBox(height: AppConstants.spacingS),
-            ...alliances.map((alliance) => _buildAllianceRow(alliance)).toList(),
+            ...alliances.map((alliance) => _buildAllianceRow(context, alliance)).toList(),
           ],
         ],
       ),
     );
   }
   
-  Widget _buildAllianceRow(dynamic alliance) {
+  Widget _buildAllianceRow(BuildContext context, dynamic alliance) {
     final color = alliance['color']?.toString() ?? '';
     final teams = alliance['teams'] as List<dynamic>? ?? [];
     final scoreData = alliance['score'];
@@ -3275,7 +4418,7 @@ class DivisionMatchesScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: color.toLowerCase() == 'red' ? Colors.red : 
                      color.toLowerCase() == 'blue' ? Colors.blue : 
-                     AppConstants.textSecondary,
+                     ThemeUtils.getSecondaryTextColor(context),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -3288,21 +4431,40 @@ class DivisionMatchesScreen extends StatelessWidget {
               children: teams.map((teamData) {
                 final teamDataMap = teamData['team'];
                 final teamNumber = (teamDataMap is Map) 
-                    ? (teamDataMap['name']?.toString() ?? 'Unknown')
+                    ? (teamDataMap['number']?.toString() ?? 
+                       teamDataMap['team_number']?.toString() ?? 
+                       'Unknown')
                     : 'Unknown';
+                final teamName = (teamDataMap is Map) 
+                    ? (teamDataMap['name']?.toString() ?? 
+                       teamDataMap['team_name']?.toString() ?? 
+                       teamDataMap['robot_name']?.toString() ?? 
+                       '')
+                    : '';
+                
+                // Determine alliance color
+                Color allianceColor = ThemeUtils.getSecondaryTextColor(context);
+                if (color.toLowerCase().contains('red')) {
+                  allianceColor = Colors.red;
+                } else if (color.toLowerCase().contains('blue')) {
+                  allianceColor = Colors.blue;
+                } else {
+                  allianceColor = AppConstants.vexIQBlue;
+                }
+                
                 return Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: AppConstants.vexIQBlue.withOpacity(0.1),
+                    color: allianceColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
                   ),
                   child: Text(
-                    teamNumber,
+                    teamName.isNotEmpty ? '$teamNumber ($teamName)' : teamNumber,
                     style: AppConstants.caption.copyWith(
-                      color: AppConstants.vexIQBlue,
+                      color: allianceColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3371,4 +4533,7 @@ class DivisionMatchesScreen extends StatelessWidget {
     
     return 'Not Scheduled';
   }
+
+
+
 } 

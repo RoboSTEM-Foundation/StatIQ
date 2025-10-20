@@ -37,19 +37,22 @@ class Team {
 
   factory Team.fromJson(Map<String, dynamic> json) {
     try {
-      // Handle location data which might be nested
+      // Handle location data which might be nested or flat
       final location = json['location'] as Map<String, dynamic>? ?? {};
+      
+      final teamNumber = json['number'] as String? ?? json['team'] as String? ?? '';
+      print('🔍 Team.fromJson Debug: json["number"] = ${json['number']}, json["team"] = ${json['team']}, final number = "$teamNumber"');
       
       return Team(
         id: json['id'] as int? ?? 0,
-        number: json['number'] as String? ?? '',
-        name: json['team_name'] as String? ?? '',
+        number: teamNumber,
+        name: json['teamName'] as String? ?? json['team_name'] as String? ?? '',
         organization: json['organization'] as String? ?? '',
-        robotName: json['robot_name'] as String? ?? '',
-        city: location['city'] as String? ?? '',
-        region: location['region'] as String? ?? '',
-        country: location['country'] as String? ?? '',
-        grade: json['grade'] as String? ?? '',
+        robotName: json['robotName'] as String? ?? json['robot_name'] as String? ?? '',
+        city: json['city'] as String? ?? location['city'] as String? ?? '',
+        region: json['region'] as String? ?? location['region'] as String? ?? '',
+        country: json['country'] as String? ?? location['country'] as String? ?? '',
+        grade: json['gradeLevel'] as String? ?? json['grade'] as String? ?? '',
         registered: json['registered'] as bool? ?? false,
         eventCount: json['event_count'] as int? ?? 0,
         awards: (json['awards'] as List<dynamic>?)
@@ -193,7 +196,38 @@ class Match {
     this.blueScore,
   });
 
-  factory Match.fromJson(Map<String, dynamic> json) => _$MatchFromJson(json);
+  factory Match.fromJson(Map<String, dynamic> json) {
+    // Handle both string and numeric values for VEX IQ matches
+    int parseField(dynamic value) {
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value) ?? 0;
+      return 0;
+    }
+    
+    return Match(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      started: json['started'] == null
+          ? null
+          : DateTime.parse(json['started'] as String),
+      scheduled: json['scheduled'] == null
+          ? null
+          : DateTime.parse(json['scheduled'] as String),
+      field: parseField(json['field']),
+      instance: parseField(json['instance']),
+      tournamentLevel: parseField(json['tournamentLevel']),
+      alliances: (json['alliances'] as List<dynamic>?)
+              ?.map((e) => MatchTeam.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      redScore: json['redScore'] == null
+          ? null
+          : MatchScore.fromJson(json['redScore'] as Map<String, dynamic>),
+      blueScore: json['blueScore'] == null
+          ? null
+          : MatchScore.fromJson(json['blueScore'] as Map<String, dynamic>),
+    );
+  }
   Map<String, dynamic> toJson() => _$MatchToJson(this);
 }
 
@@ -209,7 +243,51 @@ class MatchTeam {
     this.score = 0,
   });
 
-  factory MatchTeam.fromJson(Map<String, dynamic> json) => _$MatchTeamFromJson(json);
+  factory MatchTeam.fromJson(Map<String, dynamic> json) {
+    // Handle VEX IQ match team structure
+    List<Team> parseTeams(dynamic teamsData) {
+      if (teamsData is! List) return [];
+      
+      return teamsData.map((teamData) {
+        if (teamData is Map<String, dynamic>) {
+          // Handle nested team structure from API
+          final teamInfo = teamData['team'] as Map<String, dynamic>?;
+          if (teamInfo != null) {
+            // Create a proper team object from the nested structure
+            // VEX IQ specific: team identifier might be in 'name' field instead of 'number'
+            final teamNumber = teamInfo['number'] as String? ?? 
+                               teamInfo['name'] as String? ?? 
+                               teamInfo['code'] as String? ?? '';
+            final teamName = teamInfo['team_name'] as String? ?? 
+                             (teamInfo['name'] != teamNumber ? teamInfo['name'] as String? : '') ?? '';
+            
+            return Team(
+              id: teamInfo['id'] as int? ?? 0,
+              number: teamNumber,
+              name: teamName,
+              robotName: teamInfo['robot_name'] as String? ?? '',
+              organization: teamInfo['organization'] as String? ?? '',
+              city: teamInfo['city'] as String? ?? '',
+              region: teamInfo['region'] as String? ?? '',
+              country: teamInfo['country'] as String? ?? '',
+              grade: teamInfo['grade_level'] as String? ?? teamInfo['grade'] as String? ?? '',
+              registered: teamData['sitting'] == false,
+            );
+          }
+        }
+        // Fallback to direct team parsing
+        return Team.fromJson(teamData as Map<String, dynamic>);
+      }).toList();
+    }
+    
+    return MatchTeam(
+      color: json['color'] as String? ?? '',
+      teams: parseTeams(json['teams']),
+      score: json['score'] is int 
+          ? json['score'] as int
+          : int.tryParse(json['score']?.toString() ?? '0') ?? 0,
+    );
+  }
   Map<String, dynamic> toJson() => _$MatchTeamToJson(this);
 }
 

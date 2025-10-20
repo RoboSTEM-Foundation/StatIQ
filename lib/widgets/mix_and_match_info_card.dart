@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -60,7 +61,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
           ),
           child: Icon(
             Icons.sports_esports,
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             size: 32,
           ),
         ),
@@ -72,7 +73,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
               Text(
                 'VEX IQ Challenge',
                 style: AppConstants.headline6.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
                 ),
               ),
               Text(
@@ -85,7 +86,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
               Text(
                 '2025-2026 Season',
                 style: AppConstants.bodyText2.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
                 ),
               ),
             ],
@@ -103,7 +104,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
           child: Text(
             'CURRENT',
             style: AppConstants.caption.copyWith(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -116,7 +117,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacingM),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.onPrimary,
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
         border: Border.all(
           color: AppConstants.borderColor,
@@ -299,7 +300,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
             'Note: Season IDs will be updated when officially announced by VEX Robotics.',
             style: AppConstants.caption.copyWith(
               fontStyle: FontStyle.italic,
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
         ],
@@ -340,7 +341,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
             label: const Text('Game Manual'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppConstants.vexIQBlue,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingM),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
@@ -356,7 +357,7 @@ class MixAndMatchInfoCard extends StatelessWidget {
             label: const Text('VEX IQ Site'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppConstants.vexIQGreen,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingM),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),

@@ -11,6 +11,7 @@ class UserSettings extends ChangeNotifier {
   static const String _favoriteEventsKey = 'favorite_events';
   static const String _robotEventsApiKeyKey = 'robotevents_api_key';
   static const String _isDarkModeKey = 'isDarkMode';
+  static const String _myTeamKey = 'my_team';
   
   static UserSettings? _instance;
   static SharedPreferences? _prefs;
@@ -25,6 +26,7 @@ class UserSettings extends ChangeNotifier {
   List<String> _favoriteEvents = [];
   String? _robotEventsApiKey;
   bool _isDarkMode = false;
+  String? _myTeam;
   
   // Getters
   String get gradeLevel => _gradeLevel;
@@ -36,6 +38,7 @@ class UserSettings extends ChangeNotifier {
   List<String> get favoriteEvents => List.unmodifiable(_favoriteEvents);
   String? get robotEventsApiKey => _robotEventsApiKey;
   bool get isDarkMode => _isDarkMode;
+  String? get myTeam => _myTeam;
   
   // Available grade levels for VEX IQ
   static const List<String> availableGradeLevels = [
@@ -70,6 +73,7 @@ class UserSettings extends ChangeNotifier {
     _favoriteTeams = _prefs!.getStringList(_favoriteTeamsKey) ?? [];
     _favoriteEvents = _prefs!.getStringList(_favoriteEventsKey) ?? [];
     _robotEventsApiKey = _prefs!.getString(_robotEventsApiKeyKey);
+    _myTeam = _prefs!.getString(_myTeamKey);
     notifyListeners();
   }
   
@@ -88,6 +92,9 @@ class UserSettings extends ChangeNotifier {
     await _prefs!.setStringList(_favoriteEventsKey, _favoriteEvents);
     if (_robotEventsApiKey != null) {
       await _prefs!.setString(_robotEventsApiKeyKey, _robotEventsApiKey!);
+    }
+    if (_myTeam != null) {
+      await _prefs!.setString(_myTeamKey, _myTeam!);
     }
     notifyListeners();
   }
@@ -219,6 +226,7 @@ class UserSettings extends ChangeNotifier {
     _favoriteEvents = [];
     _robotEventsApiKey = null;
     _isDarkMode = false;
+    _myTeam = null;
     
     await _saveSettings();
     notifyListeners();
@@ -236,6 +244,7 @@ class UserSettings extends ChangeNotifier {
       'favoriteEvents': _favoriteEvents,
       'robotEventsApiKey': _robotEventsApiKey,
       'isDarkMode': _isDarkMode,
+      'myTeam': _myTeam,
     };
   }
   
@@ -250,8 +259,17 @@ class UserSettings extends ChangeNotifier {
     _favoriteEvents = List<String>.from(json['favoriteEvents'] ?? []);
     _robotEventsApiKey = json['robotEventsApiKey'];
     _isDarkMode = json['isDarkMode'] ?? false;
+    _myTeam = json['myTeam'];
     
     await _saveSettings();
     notifyListeners();
+  }
+
+  Future<void> setMyTeam(String? teamNumber) async {
+    if (_myTeam != teamNumber) {
+      _myTeam = teamNumber;
+      await _saveSettings();
+      notifyListeners();
+    }
   }
 } 

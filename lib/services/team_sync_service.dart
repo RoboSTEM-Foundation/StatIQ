@@ -1,14 +1,19 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:stat_iq/services/team_search_service.dart';
+import 'package:stat_iq/services/optimized_team_search.dart';
 
 class TeamSyncService {
-  static const String _teamListUrl = 'https://raw.githubusercontent.com/Lavadeg31/TeamList/refs/heads/main/lib/data/master_team_list.json';
+  static const String _teamListUrl = 'https://api.github.com/repos/Lavadeg31/teamlist/contents/lib/data/master_team_list.json';
   static const String _githubToken = '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';
   static const String _lastSyncKey = 'team_list_last_sync';
   static const String _teamListKey = 'cached_team_list';
   static const Duration _syncInterval = Duration(days: 7); // Weekly sync
+  
+  // Progress tracking
+  static double _downloadProgress = 0.0;
+  static String _downloadStatus = 'Preparing download...';
 
   /// Check if team list needs to be synced
   static Future<bool> needsSync() async {
@@ -31,38 +36,130 @@ class TeamSyncService {
   /// Sync team list from GitHub
   static Future<bool> syncTeamList() async {
     try {
+      _downloadProgress = 0.0;
+      _downloadStatus = 'Starting download...';
       print('🔄 Starting team list sync...');
+      print('📡 Fetching from: $_teamListUrl');
+      
+      _downloadStatus = 'Connecting to GitHub...';
+      _downloadProgress = 0.1;
       
       final response = await http.get(
         Uri.parse(_teamListUrl),
         headers: {
-          'Accept': 'application/json',
+          'Accept': 'application/vnd.github.v3+json',
           'User-Agent': 'StatIQ-App/1.0',
           'Authorization': 'token $_githubToken',
         },
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Request timeout: GitHub API took too long to respond');
+        },
       );
 
-                   if (response.statusCode == 200) {
-               final teamData = json.decode(response.body);
+      _downloadStatus = 'Downloading team data...';
+      _downloadProgress = 0.5;
+      
+      print('📊 Response status: ${response.statusCode}');
+      print('📊 Response body length: ${response.body.length}');
+      print('📊 Response body preview: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
 
-               // Cache the data locally
-               final prefs = await SharedPreferences.getInstance();
-               await prefs.setString(_teamListKey, json.encode(teamData));
-               await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
+      if (response.statusCode == 200) {
+        _downloadStatus = 'Parsing team data...';
+        _downloadProgress = 0.7;
+        
+        // GitHub API returns file info
+        final fileInfo = json.decode(response.body);
+        final fileSize = fileInfo['size'] as int;
+        print('📊 File size: $fileSize bytes');
+        
+        String jsonString;
+        
+        // For files larger than 1MB, GitHub doesn't return content directly
+        if (fileSize > 1024 * 1024) {
+          print('📊 File is large ($fileSize bytes), using download URL...');
+          final downloadUrl = fileInfo['download_url'] as String;
+          print('📊 Download URL: $downloadUrl');
+          
+          // Fetch the actual file content using download URL
+          final downloadResponse = await http.get(
+            Uri.parse(downloadUrl),
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'StatIQ-App/1.0',
+              'Authorization': 'token $_githubToken',
+            },
+          ).timeout(
+            const Duration(seconds: 60),
+            onTimeout: () {
+              throw Exception('Download timeout: File download took too long');
+            },
+          );
+          
+          if (downloadResponse.statusCode == 200) {
+            jsonString = downloadResponse.body;
+            print('📊 Downloaded content length: ${jsonString.length}');
+          } else {
+            throw Exception('Failed to download file: ${downloadResponse.statusCode}');
+          }
+        } else {
+          // For small files, decode base64 content directly
+          final base64Content = fileInfo['content'] as String;
+          final decodedBytes = base64.decode(base64Content);
+          jsonString = utf8.decode(decodedBytes);
+        }
+        
+        final teamData = json.decode(jsonString);
+        final teamCount = teamData['teams']?.length ?? 0;
 
-               // Initialize search indexes with new data
-               await TeamSearchService.initializeSearchIndexes();
+        print('📊 Parsed team data: $teamCount teams');
 
-               print('✅ Team list synced successfully: ${teamData['teams']?.length ?? 0} teams');
-               return true;
+        _downloadStatus = 'Saving to local storage...';
+        _downloadProgress = 0.9;
+        
+        // Cache the data locally
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_teamListKey, json.encode(teamData));
+        await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
+
+        _downloadStatus = 'Initializing search engine...';
+        _downloadProgress = 0.95;
+        
+        // Initialize optimized search with new data (with timeout)
+        try {
+          await OptimizedTeamSearch.initialize().timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw Exception('Search engine initialization timeout');
+            },
+          );
+        } catch (e) {
+          print('⚠️ Search engine initialization failed: $e');
+          // Continue anyway - the data is saved, search will work on next app restart
+        }
+
+        _downloadStatus = 'Complete!';
+        _downloadProgress = 1.0;
+        
+        print('✅ Team list synced successfully: $teamCount teams');
+        return true;
       } else if (response.statusCode == 404) {
+        _downloadStatus = 'Team list not found';
+        _downloadProgress = 0.0;
         print('⚠️ Team list not found yet. GitHub Action may not have run yet.');
+        print('🔍 URL: $_teamListUrl');
         return false;
       } else {
+        _downloadStatus = 'Download failed';
+        _downloadProgress = 0.0;
         print('❌ Failed to sync team list: ${response.statusCode}');
+        print('📄 Response body: ${response.body.substring(0, response.body.length.clamp(0, 500))}');
         return false;
       }
     } catch (e) {
+      _downloadStatus = 'Error: $e';
+      _downloadProgress = 0.0;
       print('❌ Error syncing team list: $e');
       return false;
     }
@@ -164,4 +261,10 @@ class TeamSyncService {
       print('Error clearing cache: $e');
     }
   }
+  
+  /// Get download progress (0.0 to 1.0)
+  static double getDownloadProgress() => _downloadProgress;
+  
+  /// Get download status message
+  static String getDownloadStatus() => _downloadStatus;
 }

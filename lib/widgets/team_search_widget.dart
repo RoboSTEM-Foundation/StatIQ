@@ -6,6 +6,7 @@ import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:provider/provider.dart';
 import 'package:stat_iq/services/user_settings.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import 'dart:async';
 
 class TeamSearchWidget extends StatefulWidget {
@@ -212,11 +213,11 @@ class _TeamSearchWidgetState extends State<TeamSearchWidget> {
         decoration: InputDecoration(
           hintText: widget.hintText ?? 'Search teams by number, name, or location...',
           hintStyle: AppConstants.bodyText2.copyWith(
-            color: AppConstants.textSecondary,
+            color: ThemeUtils.getSecondaryTextColor(context),
           ),
           prefixIcon: Icon(
             Icons.search,
-            color: AppConstants.textSecondary,
+            color: ThemeUtils.getSecondaryTextColor(context),
           ),
           suffixIcon: _isSearching
               ? const Padding(
@@ -229,7 +230,7 @@ class _TeamSearchWidgetState extends State<TeamSearchWidget> {
                 )
               : _searchController.text.isNotEmpty
                   ? IconButton(
-                      icon: Icon(Icons.clear, color: AppConstants.textSecondary),
+                      icon: Icon(Icons.clear, color: Theme.of(context).iconTheme.color),
                       onPressed: () {
                         _searchController.clear();
                         setState(() {
@@ -348,20 +349,20 @@ class _TeamSearchWidgetState extends State<TeamSearchWidget> {
           Icon(
             Icons.search,
             size: 64,
-            color: AppConstants.textSecondary.withOpacity(0.5),
+            color: ThemeUtils.getVeryMutedTextColor(context),
           ),
           const SizedBox(height: AppConstants.spacingM),
           Text(
             'Search Teams',
             style: AppConstants.headline6.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingS),
           Text(
             'Enter a team number, name, or location to search',
             style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
             textAlign: TextAlign.center,
           ),
@@ -378,20 +379,20 @@ class _TeamSearchWidgetState extends State<TeamSearchWidget> {
           Icon(
             Icons.search_off,
             size: 64,
-            color: AppConstants.textSecondary.withOpacity(0.5),
+            color: ThemeUtils.getVeryMutedTextColor(context),
           ),
           const SizedBox(height: AppConstants.spacingM),
           Text(
             'No Teams Found',
             style: AppConstants.headline6.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingS),
           Text(
             'Try searching with a different term',
             style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
         ],
@@ -443,7 +444,7 @@ class _TeamSearchWidgetState extends State<TeamSearchWidget> {
               Text(
                 team['location'],
                 style: AppConstants.caption.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
                 ),
               ),
           ],
@@ -451,7 +452,7 @@ class _TeamSearchWidgetState extends State<TeamSearchWidget> {
         trailing: Icon(
           Icons.arrow_forward_ios,
           size: 16,
-          color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
         ),
       ),
     );

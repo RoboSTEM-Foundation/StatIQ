@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 
 class CreditsScreen extends StatelessWidget {
@@ -29,14 +30,14 @@ class CreditsScreen extends StatelessWidget {
                     'Credits',
                     style: AppConstants.headline4.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: AppConstants.textPrimary,
+                      color: Theme.of(context).textTheme.titleLarge?.color,
                     ),
                   ),
                   const SizedBox(height: AppConstants.spacingS),
                   Text(
                     'Special thanks to everyone who made this app possible',
                     style: AppConstants.bodyText2.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -46,7 +47,7 @@ class CreditsScreen extends StatelessWidget {
             const SizedBox(height: AppConstants.spacingL),
             
             // Credits List
-            _buildCreditCard(
+            _buildCreditCard(context,
               name: 'alex',
               handle: '@1698v',
               description: 'Thanks for providing a 2nd API key and the opportunity for me to develop this app for statIQ',
@@ -55,16 +56,16 @@ class CreditsScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppConstants.spacingM),
             
-            _buildCreditCard(
+            _buildCreditCard(context,
               name: 'jason',
               handle: '@2982_x',
-              description: 'Thanks for considering my request and asking alex to hire me',
+              description: 'Thanks for considering my request and asking alex to let me develop this app',
               icon: Icons.handshake,
               color: AppConstants.vexIQGreen,
             ),
             const SizedBox(height: AppConstants.spacingM),
             
-            _buildCreditCard(
+            _buildCreditCard(context,
               name: 'cody',
               handle: '@theman___123',
               description: 'Thanks for contributing some code also alex plz unban this guy he made the server fun',
@@ -73,7 +74,7 @@ class CreditsScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppConstants.spacingM),
             
-            _buildCreditCard(
+            _buildCreditCard(context,
               name: 'William Castro',
               handle: '@SunkenSplash',
               description: 'Thanks for giving random info when I ask and for helping with this project',
@@ -82,7 +83,7 @@ class CreditsScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppConstants.spacingM),
             
-            _buildCreditCard(
+            _buildCreditCard(context,
               name: 'glitch',
               handle: '@gli4ch',
               description: 'Thanks for designing the icon for the app',
@@ -91,7 +92,7 @@ class CreditsScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppConstants.spacingM),
             
-            _buildCreditCard(
+            _buildCreditCard(context,
               name: 'lars',
               handle: '@_lvdg',
               description: 'Thanks for developing this app and making it awesome',
@@ -108,9 +109,9 @@ class CreditsScreen extends StatelessWidget {
                   Divider(color: AppConstants.borderColor),
                   const SizedBox(height: AppConstants.spacingM),
                   Text(
-                    'Made with ❤️ for The Capped Pins',
+                    'Made with ❤️ for RoboStem Inc',
                     style: AppConstants.bodyText2.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                       fontStyle: FontStyle.italic,
                     ),
                   ),
@@ -118,7 +119,7 @@ class CreditsScreen extends StatelessWidget {
                   Text(
                     'VEX IQ Mix & Match 2025-2026',
                     style: AppConstants.caption.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
                   ),
                 ],
@@ -130,7 +131,8 @@ class CreditsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCreditCard({
+  Widget _buildCreditCard(
+    BuildContext context, {
     required String name,
     required String handle,
     required String description,
@@ -183,7 +185,7 @@ class CreditsScreen extends StatelessWidget {
                   Text(
                     description,
                     style: AppConstants.bodyText2.copyWith(
-                      color: AppConstants.textSecondary,
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
                   ),
                 ],

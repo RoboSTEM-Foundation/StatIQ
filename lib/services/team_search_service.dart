@@ -12,89 +12,88 @@ class TeamSearchService {
   static Map<String, List<int>> _locationIndex = {};
   static List<Map<String, dynamic>> _allTeams = [];
   
-  /// Initialize search indexes from cached team data
+  /// Initialize search indexes from cached team data (async to avoid UI blocking)
   static Future<void> initializeSearchIndexes() async {
+    // Try to load cached indexes first (fastest)
+    if (await _loadCachedIndexes()) {
+      print('🔍 Loaded cached search indexes');
+      return;
+    }
+    
+    // If no cached indexes, build them in background
     final prefs = await SharedPreferences.getInstance();
     final cachedTeamsString = prefs.getString(_teamDataKey);
     
     if (cachedTeamsString != null) {
+      // Parse data in background
       final Map<String, dynamic> data = json.decode(cachedTeamsString);
       _allTeams = List<Map<String, dynamic>>.from(data['teams'] ?? []);
-      _buildSearchIndexes();
+      
+      // Build indexes in background
+      await _buildSearchIndexesAsync();
       print('🔍 Search indexes built for ${_allTeams.length} teams');
     }
   }
   
-  /// Build optimized search indexes
-  static void _buildSearchIndexes() {
+  /// Build optimized search indexes (async version to avoid UI blocking)
+  static Future<void> _buildSearchIndexesAsync() async {
     _numberIndex.clear();
     _nameIndex.clear();
     _organizationIndex.clear();
     _locationIndex.clear();
     
-    for (int i = 0; i < _allTeams.length; i++) {
-      final team = _allTeams[i];
+    // Process teams in batches to avoid blocking UI
+    const batchSize = 1000;
+    for (int start = 0; start < _allTeams.length; start += batchSize) {
+      final end = (start + batchSize).clamp(0, _allTeams.length);
       
-      // Team number index (most important for fast searches)
-      final teamNumber = (team['number'] ?? '').toString().toLowerCase();
-      if (teamNumber.isNotEmpty) {
-        // Add full number
-        _addToIndex(_numberIndex, teamNumber, i);
+      for (int i = start; i < end; i++) {
+        final team = _allTeams[i];
         
-        // Add prefixes for fast partial matching
-        for (int j = 1; j <= teamNumber.length; j++) {
-          _addToIndex(_numberIndex, teamNumber.substring(0, j), i);
+        // Team number index (most important for fast searches)
+        final teamNumber = (team['number'] ?? '').toString().toLowerCase();
+        if (teamNumber.isNotEmpty) {
+          // Add full number
+          _addToIndex(_numberIndex, teamNumber, i);
+          
+          // Add prefixes for fast partial matching (limit to 3 chars to reduce memory)
+          final maxPrefixLength = teamNumber.length > 3 ? 3 : teamNumber.length;
+          for (int j = 1; j <= maxPrefixLength; j++) {
+            _addToIndex(_numberIndex, teamNumber.substring(0, j), i);
+          }
+        }
+        
+        // Team name index (simplified to reduce memory usage)
+        final teamName = (team['name'] ?? '').toString().toLowerCase();
+        if (teamName.isNotEmpty && teamName.length <= 50) { // Limit long names
+          _addToIndex(_nameIndex, teamName, i);
+        }
+        
+        // Organization index (simplified)
+        final organization = (team['organization'] ?? '').toString().toLowerCase();
+        if (organization.isNotEmpty && organization.length <= 100) { // Limit long org names
+          _addToIndex(_organizationIndex, organization, i);
+        }
+        
+        // Location index (simplified)
+        final city = (team['city'] ?? '').toString().toLowerCase();
+        final region = (team['region'] ?? '').toString().toLowerCase();
+        if (city.isNotEmpty) {
+          _addToIndex(_locationIndex, city, i);
+        }
+        if (region.isNotEmpty) {
+          _addToIndex(_locationIndex, region, i);
         }
       }
       
-      // Team name index
-      final teamName = (team['name'] ?? '').toString().toLowerCase();
-      if (teamName.isNotEmpty) {
-        _addToIndex(_nameIndex, teamName, i);
-        // Add word prefixes
-        final words = teamName.split(' ');
-        for (final word in words) {
-          if (word.isNotEmpty) {
-            for (int j = 1; j <= word.length; j++) {
-              _addToIndex(_nameIndex, word.substring(0, j), i);
-            }
-          }
-        }
-      }
-      
-      // Organization index
-      final organization = (team['organization'] ?? '').toString().toLowerCase();
-      if (organization.isNotEmpty) {
-        _addToIndex(_organizationIndex, organization, i);
-        final words = organization.split(' ');
-        for (final word in words) {
-          if (word.isNotEmpty) {
-            for (int j = 1; j <= word.length; j++) {
-              _addToIndex(_organizationIndex, word.substring(0, j), i);
-            }
-          }
-        }
-      }
-      
-      // Location index
-      final city = (team['city'] ?? '').toString().toLowerCase();
-      final region = (team['region'] ?? '').toString().toLowerCase();
-      final location = '$city $region'.trim();
-      if (location.isNotEmpty) {
-        _addToIndex(_locationIndex, location, i);
-        final words = location.split(' ');
-        for (final word in words) {
-          if (word.isNotEmpty) {
-            for (int j = 1; j <= word.length; j++) {
-              _addToIndex(_locationIndex, word.substring(0, j), i);
-            }
-          }
-        }
+      // Yield control to allow UI updates
+      if (start + batchSize < _allTeams.length) {
+        await Future.delayed(const Duration(milliseconds: 1));
       }
     }
     
     // Cache the indexes
-    _cacheSearchIndexes();
+    await _cacheSearchIndexes();
   }
   
   /// Add entry to search index
@@ -160,6 +159,11 @@ class TeamSearchService {
       return _allTeams.take(limit).toList();
     }
     
+    // If indexes are not ready, use simple search
+    if (_numberIndex.isEmpty && _allTeams.isNotEmpty) {
+      return _simpleSearch(query, limit);
+    }
+    
     final lowerQuery = query.toLowerCase().trim();
     final Set<int> resultIndices = {};
     
@@ -195,6 +199,27 @@ class TeamSearchService {
     // Convert indices to team data and sort by relevance
     final results = resultIndices.map((index) => _allTeams[index]).toList();
     return _sortByRelevance(results, lowerQuery).take(limit).toList();
+  }
+  
+  /// Simple search fallback when indexes are not ready
+  static List<Map<String, dynamic>> _simpleSearch(String query, int limit) {
+    final lowerQuery = query.toLowerCase().trim();
+    final results = <Map<String, dynamic>>[];
+    
+    for (final team in _allTeams) {
+      final teamNumber = (team['number'] ?? '').toString().toLowerCase();
+      final teamName = (team['name'] ?? '').toString().toLowerCase();
+      final organization = (team['organization'] ?? '').toString().toLowerCase();
+      
+      if (teamNumber.contains(lowerQuery) || 
+          teamName.contains(lowerQuery) || 
+          organization.contains(lowerQuery)) {
+        results.add(team);
+        if (results.length >= limit) break;
+      }
+    }
+    
+    return _sortByRelevance(results, lowerQuery);
   }
   
   /// Sort results by relevance (exact matches first, then prefix matches, then contains)

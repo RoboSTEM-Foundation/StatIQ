@@ -5,14 +5,17 @@ import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/widgets/vex_iq_score_card.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 // import 'package:stat_iq/constants/api_config.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
 
 class TeamDetailsScreen extends StatefulWidget {
   final Team team;
+  final int? eventId; // Optional event ID to filter matches (Bug Patch 3 requirement)
 
   const TeamDetailsScreen({
     super.key,
     required this.team,
+    this.eventId,
   });
 
   @override
@@ -42,8 +45,46 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _loadTeamData();
+    _tabController = TabController(length: 4, vsync: this);
+    _loadTeamData(    );
+  }
+
+  String _getEventNameForMatch(Match match) {
+    // Try to find event information from team events
+    if (_currentTeam != null && _teamEvents.isNotEmpty) {
+      // If we have a specific event ID, return that event's name
+      if (widget.eventId != null) {
+        final specificEvent = _teamEvents.firstWhere(
+          (event) => event.id == widget.eventId,
+          orElse: () => _teamEvents.first,
+        );
+        return specificEvent.name;
+      }
+      
+      // For matches from all events, try to match by date proximity
+      if (match.scheduled != null) {
+        Event? closestEvent;
+        int minDaysDiff = 365; // Start with a large number
+        
+        for (final event in _teamEvents) {
+          if (event.start != null) {
+            final daysDiff = (match.scheduled!.difference(event.start!).inDays).abs();
+            if (daysDiff < minDaysDiff) {
+              minDaysDiff = daysDiff;
+              closestEvent = event;
+            }
+          }
+        }
+        
+        if (closestEvent != null && minDaysDiff <= 7) {
+          return closestEvent.name; // Only use if within a week
+        }
+      }
+      
+      // Fallback: use the first event
+      return _teamEvents.first.name;
+    }
+    return 'Unknown Event';
   }
 
   @override
@@ -52,9 +93,33 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
     super.dispose();
   }
 
+  Team? _currentTeam;
+  
   Future<void> _loadTeamData() async {
+    // If team ID is 0 or invalid, try to find the team by number first
+    if (widget.team.id == 0 && widget.team.number.isNotEmpty) {
+      try {
+        print('🔍 Team ID is 0, searching for team by number: ${widget.team.number}');
+        final searchResults = await RobotEventsAPI.searchTeams(teamNumber: widget.team.number);
+        if (searchResults.isNotEmpty) {
+          final foundTeam = searchResults.first;
+          print('✅ Found team with ID: ${foundTeam.id}');
+          // Use the found team with proper ID
+          _currentTeam = foundTeam;
+        } else {
+          print('⚠️ No team found with number: ${widget.team.number}');
+          _currentTeam = widget.team;
+        }
+      } catch (e) {
+        print('❌ Error searching for team: $e');
+        _currentTeam = widget.team;
+      }
+    } else {
+      _currentTeam = widget.team;
+    }
+    
+    await _loadTeamEvents();
     await Future.wait([
-      _loadTeamEvents(),
       _loadTeamAwards(),
       _loadCompetitionData(),
     ]);
@@ -62,8 +127,9 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
 
   Future<void> _loadTeamEvents() async {
     try {
+      final teamId = _currentTeam?.id ?? widget.team.id;
       final events = await RobotEventsAPI.getTeamEvents(
-        teamId: widget.team.id,
+        teamId: teamId,
         seasonId: _selectedSeasonId,
       );
       if (mounted) {
@@ -85,7 +151,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   Future<void> _loadTeamAwards() async {
     try {
       final awards = await RobotEventsAPI.getTeamAwards(
-        teamId: widget.team.id,
+        teamId: _currentTeam?.id ?? widget.team.id,
         seasonId: _selectedSeasonId,
       );
       if (mounted) {
@@ -106,10 +172,43 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
 
   Future<void> _loadCompetitionData() async {
     try {
-      // Load matches, rankings, and skills data
-      // This would require additional API endpoints that may not be available
+      if (_currentTeam == null) {
+        if (mounted) {
+          setState(() {
+            _isLoadingCompetitionData = false;
+          });
+        }
+        return;
+      }
+
+      // Use the new direct team matches API (Bug Patch 3 requirement)
+      final matchesData = await RobotEventsAPI.getTeamMatches(
+        teamId: _currentTeam!.id,
+        seasonId: _selectedSeasonId,
+        eventIds: widget.eventId != null ? [widget.eventId!] : null, // Filter by event if provided, null means all events
+      );
+
+      final allMatches = <Match>[];
+      for (final matchData in matchesData) {
+        try {
+          final match = Match.fromJson(matchData as Map<String, dynamic>);
+          allMatches.add(match);
+        } catch (e) {
+          print('Error parsing match data: $e');
+        }
+      }
+
+      // Sort matches by scheduled time (earliest first)
+      allMatches.sort((a, b) {
+        if (a.scheduled == null && b.scheduled == null) return 0;
+        if (a.scheduled == null) return 1;
+        if (b.scheduled == null) return -1;
+        return a.scheduled!.compareTo(b.scheduled!);
+      });
+
       if (mounted) {
         setState(() {
+          _teamMatches = allMatches;
           _isLoadingCompetitionData = false;
         });
       }
@@ -127,10 +226,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
     setState(() {
       _usePreviousSeason = usePrevious;
       if (usePrevious) {
-        _selectedSeason = 'Rapid Relay (2024-2025)';
+        _selectedSeason = 'Rapid Relay';
         _selectedSeasonId = 189; // Rapid Relay season ID (has data)
       } else {
-        _selectedSeason = 'Mix & Match (2025-2026)';
+        _selectedSeason = 'Mix & Match';
         _selectedSeasonId = 196; // Mix & Match season ID (current)
       }
       _isLoadingEvents = true;
@@ -145,12 +244,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppConstants.textPrimary),
+          icon: Icon(Icons.arrow_back, color: Theme.of(context).iconTheme.color),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Column(
@@ -158,18 +255,18 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              widget.team.number,
+              (_currentTeam ?? widget.team).number,
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textPrimary,
+                color: Theme.of(context).textTheme.titleLarge?.color,
                 fontWeight: FontWeight.bold,
               ),
               overflow: TextOverflow.ellipsis,
             ),
-            if (widget.team.name.isNotEmpty)
+            if ((_currentTeam ?? widget.team).name.isNotEmpty)
               Text(
-                widget.team.name,
+                (_currentTeam ?? widget.team).name,
                 style: AppConstants.caption.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: Theme.of(context).iconTheme.color,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
@@ -178,20 +275,21 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         ),
         actions: [
           _buildSeasonSelector(),
-          IconButton(
-            icon: Icon(Icons.share, color: AppConstants.textPrimary),
-            onPressed: () => _shareTeam(),
-          ),
+            IconButton(
+              icon: Icon(Icons.share, color: Theme.of(context).iconTheme.color),
+              onPressed: () => _shareTeam(),
+            ),
         ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppConstants.vexIQBlue,
           labelColor: AppConstants.vexIQBlue,
-          unselectedLabelColor: AppConstants.textSecondary,
-          tabs: const [
-            Tab(text: 'Overview'),
-            Tab(text: 'Competitions'),
-            Tab(text: 'Awards'),
+          unselectedLabelColor: ThemeUtils.getSecondaryTextColor(context, opacity: 0.6),
+          tabs: [
+            const Tab(text: 'Overview'),
+            const Tab(text: 'Competitions'),
+            const Tab(text: 'Awards'),
+            Tab(text: widget.eventId != null ? 'Event Matches' : 'Matches'),
           ],
         ),
       ),
@@ -201,14 +299,316 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           _buildOverviewTab(),
           _buildCompetitionsTab(),
           _buildAwardsTab(),
+          _buildMatchesTab(),
         ],
       ),
     );
   }
 
+  Widget _buildMatchesTab() {
+    if (_isLoadingCompetitionData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_teamMatches.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spacingL),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.videogame_asset_off_outlined,
+                size: 64,
+                color: ThemeUtils.getVeryMutedTextColor(context),
+              ),
+              const SizedBox(height: AppConstants.spacingM),
+              Text(
+                'No Skills Matches Found',
+                style: AppConstants.headline6.copyWith(
+                  color: Theme.of(context).iconTheme.color,
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacingS),
+              Text(
+                widget.eventId != null 
+                    ? 'No skills challenge data is available for this team at this specific event.'
+                    : 'No skills challenge data is available for this team in the $_selectedSeason season.',
+                style: AppConstants.bodyText2.copyWith(
+                  color: Theme.of(context).iconTheme.color,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (widget.eventId == null) {
+      // Group matches by event when showing all competitions
+      final matchesByEvent = <String, List<Match>>{};
+      for (final match in _teamMatches) {
+        final eventName = _getEventNameForMatch(match);
+        matchesByEvent.putIfAbsent(eventName, () => []).add(match);
+      }
+
+      // Sort events by name for consistent ordering
+      final sortedEvents = matchesByEvent.keys.toList()..sort();
+      
+      return ListView.builder(
+        padding: const EdgeInsets.all(AppConstants.spacingM),
+        itemCount: sortedEvents.length,
+        itemBuilder: (context, eventIndex) {
+          final eventName = sortedEvents[eventIndex];
+          final eventMatches = matchesByEvent[eventName]!;
+          
+          // Sort matches within each event by date (earliest first)
+          eventMatches.sort((a, b) {
+            if (a.scheduled == null && b.scheduled == null) return 0;
+            if (a.scheduled == null) return 1;
+            if (b.scheduled == null) return -1;
+            return a.scheduled!.compareTo(b.scheduled!);
+          });
+          
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Event header
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.spacingM,
+                  vertical: AppConstants.spacingS,
+                ),
+                margin: EdgeInsets.only(
+                  top: eventIndex > 0 ? AppConstants.spacingL : 0.0,
+                  bottom: AppConstants.spacingS,
+                ),
+                decoration: BoxDecoration(
+                  color: AppConstants.vexIQBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppConstants.vexIQBlue.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.event,
+                      size: 16,
+                      color: AppConstants.vexIQBlue,
+                    ),
+                    const SizedBox(width: AppConstants.spacingXS),
+                    Expanded(
+                      child: Text(
+                        eventName,
+                        style: AppConstants.bodyText2.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.vexIQBlue,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.spacingS,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppConstants.vexIQBlue.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${eventMatches.length} ${eventMatches.length == 1 ? 'match' : 'matches'}',
+                        style: AppConstants.caption.copyWith(
+                          color: AppConstants.vexIQBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Matches for this event
+              ...eventMatches.map((match) => _buildMatchCard(match)).toList(),
+            ],
+          );
+        },
+      );
+    } else {
+      // Show single event matches (current implementation)
+      return ListView.builder(
+        padding: const EdgeInsets.all(AppConstants.spacingM),
+        itemCount: _teamMatches.length,
+        itemBuilder: (context, index) {
+          final match = _teamMatches[index];
+          return _buildMatchCard(match);
+        },
+      );
+    }
+  }
+
+  String _getMatchTypeDisplay(Match match) {
+    final name = match.name.toLowerCase();
+    
+    // Extract number from match name
+    final numberMatch = RegExp(r'#(\d+)').firstMatch(match.name);
+    final matchNumber = numberMatch?.group(1) ?? '??';
+    
+    if (name.contains('final')) {
+      return 'F $matchNumber';
+    } else {
+      return 'Q $matchNumber';
+    }
+  }
+
+  Widget _buildTeamPill(String teamNumber, bool isCurrentTeam) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isCurrentTeam 
+            ? AppConstants.vexIQBlue 
+            : Colors.grey[300],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        teamNumber,
+        style: TextStyle(
+          color: isCurrentTeam ? Colors.white : Colors.black87,
+          fontWeight: isCurrentTeam ? FontWeight.bold : FontWeight.normal,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMatchCard(Match match) {
+    // For VEX IQ, matches are skills challenges, not head-to-head competitions
+    // Find which alliance the team is in and get all teams in the match
+    String teamAlliance = '';
+    int teamScore = 0;
+    List<Team> allTeamsInMatch = [];
+    
+    for (final alliance in match.alliances) {
+      allTeamsInMatch.addAll(alliance.teams);
+      final hasTeam = alliance.teams.any((team) => team.id == _currentTeam?.id);
+      if (hasTeam) {
+        teamAlliance = alliance.color;
+        teamScore = alliance.score;
+      }
+    }
+
+    final matchType = _getMatchTypeDisplay(match);
+    final formattedTime = match.scheduled != null ? _formatCompactTime(match.scheduled!) : '';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+      color: Theme.of(context).brightness == Brightness.dark 
+          ? Colors.grey[800]!.withOpacity(0.3)
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingM),
+        child: Row(
+          children: [
+            // Left side: Match type and teams
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Match type and time
+                  Row(
+                    children: [
+                      Text(
+                        matchType,
+                        style: AppConstants.bodyText1.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (formattedTime.isNotEmpty)
+                        Text(
+                          formattedTime,
+                          style: AppConstants.caption.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Team pills in row
+                  if (allTeamsInMatch.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      children: allTeamsInMatch.map((team) {
+                        final isCurrentTeam = team.id == _currentTeam?.id;
+                        return _buildTeamPill(team.number, isCurrentTeam);
+                      }).toList(),
+                    ),
+                ],
+              ),
+            ),
+            // Score and arrow
+            Column(
+              children: [
+                Text(
+                  teamScore.toString(),
+                  style: AppConstants.headline4.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: ThemeUtils.getSecondaryTextColor(context),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final matchDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    
+    if (matchDate == today) {
+      return 'Today at ${_formatTime(dateTime)}';
+    } else if (matchDate == today.add(const Duration(days: 1))) {
+      return 'Tomorrow at ${_formatTime(dateTime)}';
+    } else if (matchDate == today.subtract(const Duration(days: 1))) {
+      return 'Yesterday at ${_formatTime(dateTime)}';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${_formatTime(dateTime)}';
+    }
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    return '$displayHour:$minute $period';
+  }
+
+  String _formatCompactTime(DateTime dateTime) {
+    final hour = dateTime.hour;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    return '$displayHour:$minute $period';
+  }
+
   Widget _buildSeasonSelector() {
     return PopupMenuButton<bool>(
-      icon: Icon(Icons.calendar_today, color: AppConstants.textPrimary),
+        icon: Icon(Icons.calendar_today, color: Theme.of(context).iconTheme.color),
       tooltip: 'Select Season',
       onSelected: _onSeasonChanged,
       itemBuilder: (context) => [
@@ -218,14 +618,14 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
             children: [
               Icon(
                 Icons.fiber_new,
-                color: _usePreviousSeason ? AppConstants.textSecondary : AppConstants.vexIQBlue,
+                color: _usePreviousSeason ? ThemeUtils.getSecondaryTextColor(context) : AppConstants.vexIQBlue,
                 size: 16,
               ),
               const SizedBox(width: 8),
               Text(
-                'Mix & Match (2025-2026)',
+                'Mix & Match',
                 style: TextStyle(
-                  color: _usePreviousSeason ? AppConstants.textSecondary : AppConstants.vexIQBlue,
+                  color: _usePreviousSeason ? ThemeUtils.getSecondaryTextColor(context) : AppConstants.vexIQBlue,
                   fontWeight: _usePreviousSeason ? FontWeight.normal : FontWeight.bold,
                 ),
               ),
@@ -238,14 +638,14 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
             children: [
               Icon(
                 Icons.history,
-                color: _usePreviousSeason ? AppConstants.vexIQBlue : AppConstants.textSecondary,
+                color: _usePreviousSeason ? AppConstants.vexIQBlue : ThemeUtils.getSecondaryTextColor(context),
                 size: 16,
               ),
               const SizedBox(width: 8),
               Text(
-                'Rapid Relay (2024-2025)',
+                'Rapid Relay',
                 style: TextStyle(
-                  color: _usePreviousSeason ? AppConstants.vexIQBlue : AppConstants.textSecondary,
+                  color: _usePreviousSeason ? AppConstants.vexIQBlue : ThemeUtils.getSecondaryTextColor(context),
                   fontWeight: _usePreviousSeason ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
@@ -316,18 +716,18 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.team.name.isNotEmpty ? widget.team.name : 'Team ${widget.team.number}',
+                        (_currentTeam ?? widget.team).name.isNotEmpty ? (_currentTeam ?? widget.team).name : 'Team ${(_currentTeam ?? widget.team).number}',
                         style: AppConstants.headline6.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 2,
                       ),
-                      if (widget.team.robotName.isNotEmpty)
+                      if ((_currentTeam ?? widget.team).robotName.isNotEmpty)
                         Text(
-                          'Robot: ${widget.team.robotName}',
+                          'Robot: ${(_currentTeam ?? widget.team).robotName}',
                           style: AppConstants.bodyText2.copyWith(
-                            color: AppConstants.textSecondary,
+                            color: Theme.of(context).iconTheme.color,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
@@ -338,13 +738,13 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
               ],
             ),
             const SizedBox(height: AppConstants.spacingM),
-            _buildInfoRow(Icons.school, 'Organization', widget.team.organization),
+            _buildInfoRow(Icons.school, 'Organization', (_currentTeam ?? widget.team).organization),
             _buildInfoRow(Icons.location_on, 'Location', _getTeamLocation()),
-            _buildInfoRow(Icons.grade, 'Grade Level', widget.team.grade),
+            _buildInfoRow(Icons.grade, 'Grade Level', (_currentTeam ?? widget.team).grade),
             _buildInfoRow(
-              widget.team.registered ? Icons.check_circle : Icons.radio_button_unchecked,
+              (_currentTeam ?? widget.team).registered ? Icons.check_circle : Icons.radio_button_unchecked,
               'Registration Status',
-              widget.team.registered ? 'Registered' : 'Not Registered',
+              (_currentTeam ?? widget.team).registered ? 'Registered' : 'Not Registered',
             ),
           ],
         ),
@@ -362,13 +762,13 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           Icon(
             icon,
             size: 16,
-            color: AppConstants.textSecondary,
+            color: Theme.of(context).iconTheme.color,
           ),
           const SizedBox(width: AppConstants.spacingS),
           Text(
             '$label: ',
             style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
+              color: Theme.of(context).iconTheme.color,
             ),
           ),
           Expanded(
@@ -462,7 +862,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         Text(
           label,
           style: AppConstants.caption.copyWith(
-            color: AppConstants.textSecondary,
+            color: Theme.of(context).iconTheme.color,
           ),
         ),
       ],
@@ -502,10 +902,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
             const SizedBox(height: AppConstants.spacingS),
             Text(
               _usePreviousSeason
-                  ? 'Viewing data from the previous Rapid Relay season. This was the 2024-2025 VEX IQ game.'
-                  : 'Viewing data from the current Mix & Match season. This is the active 2025-2026 VEX IQ game.',
+                  ? 'This is data from the previous season (Rapid Relay)'
+                  : 'This is data from the current season (Mix & Match)',
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: Theme.of(context).iconTheme.color,
               ),
               overflow: TextOverflow.visible,
               softWrap: true,
@@ -531,20 +931,20 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
               Icon(
                 Icons.event_busy,
                 size: 64,
-                color: AppConstants.textSecondary.withOpacity(0.5),
+                color: ThemeUtils.getVeryMutedTextColor(context),
               ),
               const SizedBox(height: AppConstants.spacingM),
               Text(
                 'No Competitions Found',
                 style: AppConstants.headline6.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: Theme.of(context).iconTheme.color,
                 ),
               ),
               const SizedBox(height: AppConstants.spacingS),
               Text(
                 'This team hasn\'t participated in any VEX IQ competitions in the $_selectedSeason season yet.',
                 style: AppConstants.bodyText2.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: Theme.of(context).iconTheme.color,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -613,14 +1013,14 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                         Icon(
                           Icons.location_on,
                           size: 16,
-                          color: AppConstants.textSecondary,
+                          color: Theme.of(context).iconTheme.color,
                         ),
                         const SizedBox(width: AppConstants.spacingS),
                         Expanded(
                           child: Text(
                             _getEventLocation(event),
                             style: AppConstants.bodyText2.copyWith(
-                              color: AppConstants.textSecondary,
+                              color: Theme.of(context).iconTheme.color,
                             ),
                           ),
                         ),
@@ -634,13 +1034,13 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                         Icon(
                           Icons.calendar_today,
                           size: 16,
-                          color: AppConstants.textSecondary,
+                          color: Theme.of(context).iconTheme.color,
                         ),
                         const SizedBox(width: AppConstants.spacingS),
                         Text(
                           '${event.start!.day}/${event.start!.month}/${event.start!.year}',
                           style: AppConstants.bodyText2.copyWith(
-                            color: AppConstants.textSecondary,
+                            color: Theme.of(context).iconTheme.color,
                           ),
                         ),
                       ],
@@ -652,13 +1052,13 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                         Icon(
                           Icons.confirmation_number,
                           size: 16,
-                          color: AppConstants.textSecondary,
+                          color: Theme.of(context).iconTheme.color,
                         ),
                         const SizedBox(width: AppConstants.spacingS),
                         Text(
                           event.sku,
                           style: AppConstants.caption.copyWith(
-                            color: AppConstants.textSecondary,
+                            color: Theme.of(context).iconTheme.color,
                             fontFamily: 'monospace',
                           ),
                         ),
@@ -689,20 +1089,20 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
               Icon(
                 Icons.emoji_events_outlined,
                 size: 64,
-                color: AppConstants.textSecondary.withOpacity(0.5),
+                color: ThemeUtils.getVeryMutedTextColor(context),
               ),
               const SizedBox(height: AppConstants.spacingM),
               Text(
                 'No Awards Found',
                 style: AppConstants.headline6.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: Theme.of(context).iconTheme.color,
                 ),
               ),
               const SizedBox(height: AppConstants.spacingS),
               Text(
                 'This team hasn\'t won any awards in the $_selectedSeason season yet.',
                 style: AppConstants.bodyText2.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: Theme.of(context).iconTheme.color,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -718,6 +1118,11 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
       itemBuilder: (context, index) {
         final awardData = _teamAwards[index] as Map<String, dynamic>;
         final awardTitle = awardData['title'] as String? ?? 'Unknown Award';
+        final eventData = awardData['event'];
+        final eventName = (eventData is Map) 
+            ? (eventData['name']?.toString() ?? 'Unknown Event')
+            : 'Unknown Event';
+        
         return Card(
           margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
           elevation: AppConstants.elevationS,
@@ -726,28 +1131,52 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           ),
           child: Padding(
             padding: const EdgeInsets.all(AppConstants.spacingM),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(AppConstants.spacingS),
-                  decoration: BoxDecoration(
-                    color: AppConstants.vexIQOrange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
-                  ),
-                  child: Icon(
-                    Icons.emoji_events,
-                    color: AppConstants.vexIQOrange,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: AppConstants.spacingM),
-                Expanded(
-                  child: Text(
-                    awardTitle,
-                    style: AppConstants.bodyText1.copyWith(
-                      fontWeight: FontWeight.bold,
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppConstants.spacingS),
+                      decoration: BoxDecoration(
+                        color: AppConstants.vexIQOrange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+                      ),
+                      child: Icon(
+                        Icons.emoji_events,
+                        color: AppConstants.vexIQOrange,
+                        size: 20,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: AppConstants.spacingM),
+                    Expanded(
+                      child: Text(
+                        awardTitle,
+                        style: AppConstants.bodyText1.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppConstants.spacingS),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.event,
+                      size: 16,
+                      color: Theme.of(context).iconTheme.color,
+                    ),
+                    const SizedBox(width: AppConstants.spacingS),
+                    Expanded(
+                      child: Text(
+                        eventName,
+                        style: AppConstants.bodyText2.copyWith(
+                          color: Theme.of(context).iconTheme.color,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -758,10 +1187,11 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   String _getTeamLocation() {
+    final team = _currentTeam ?? widget.team;
     final parts = <String>[];
-    if (widget.team.city.isNotEmpty) parts.add(widget.team.city);
-    if (widget.team.region.isNotEmpty) parts.add(widget.team.region);
-    if (widget.team.country.isNotEmpty) parts.add(widget.team.country);
+    if (team.city.isNotEmpty) parts.add(team.city);
+    if (team.region.isNotEmpty) parts.add(team.region);
+    if (team.country.isNotEmpty) parts.add(team.country);
     return parts.join(', ');
   }
 
@@ -780,7 +1210,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
     // Implement sharing functionality
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Sharing ${widget.team.number} - ${widget.team.name}'),
+        content: Text('Sharing ${(_currentTeam ?? widget.team).number} - ${(_currentTeam ?? widget.team).name}'),
         backgroundColor: AppConstants.vexIQBlue,
       ),
     );

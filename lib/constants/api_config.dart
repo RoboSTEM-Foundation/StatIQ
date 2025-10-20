@@ -175,9 +175,9 @@ class ApiConfig {
         'program': getSelectedProgramId(),
       };
     } else if (teamNumber != null && teamNumber.isNotEmpty) {
-      // Use fallback to all programs like Swift does: ["number": self.number, "program": [1, 4, 41]]
+      // Use array format for number parameter like the working API call
       return {
-        'number': teamNumber,
+        'number[]': teamNumber,
         'program': [vrcProgramId, vexuProgramId, vexIQProgramId],
       };
     } else {
@@ -192,6 +192,7 @@ class ApiConfig {
     String? query,
     int? seasonId, 
     int? levelClass,
+    List<String>? levels,
     int page = 1,
   }) {
     final selectedSeasonId = seasonId ?? getSelectedSeasonId();
@@ -210,6 +211,10 @@ class ApiConfig {
     
     if (levelClass != null && levelClass != 0) {
       params['level_class_id'] = levelClass;
+    }
+    
+    if (levels != null && levels.isNotEmpty) {
+      params['level[]'] = levels;
     }
     
     print('🔍 Final event search params: $params');
@@ -296,5 +301,14 @@ class ApiConfig {
   static const List<String> availableGradeLevels = [
     'Elementary School',
     'Middle School',
+  ];
+  
+  // Available event levels for filtering (ordered as requested: All -> Regional Championships -> National Championships -> Signature Events -> Worlds)
+  static const List<String> availableEventLevels = [
+    'Other',           // All (catch-all for other event types)
+    'State',           // Regional Championships (renamed from "State")
+    'National',        // National Championships
+    'Signature',       // Signature Events
+    'World',           // Worlds
   ];
 } 

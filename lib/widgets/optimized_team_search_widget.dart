@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/services/team_sync_service.dart';
-import 'package:stat_iq/services/team_search_service.dart';
+import 'package:stat_iq/services/optimized_team_search.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:stat_iq/services/user_settings.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import 'dart:async';
 
+/// Optimized widget for searching 26,000+ teams
+/// Uses pagination, lazy loading, and efficient rendering
 class OptimizedTeamSearchWidget extends StatefulWidget {
   final String? hintText;
   final bool showSyncStatus;
   final Function(Team)? onTeamSelected;
+  final bool isSelectionMode; // New parameter to hide icons in selection mode
 
   const OptimizedTeamSearchWidget({
     super.key,
     this.hintText,
     this.showSyncStatus = false,
     this.onTeamSelected,
+    this.isSelectionMode = false,
   });
 
   @override
@@ -26,51 +31,81 @@ class OptimizedTeamSearchWidget extends StatefulWidget {
 
 class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _searchResults = [];
-  int _displayedCount = 0;
+  final ScrollController _scrollController = ScrollController();
+
+  List<Map<String, dynamic>> _currentResults = [];
   bool _isLoading = false;
   bool _isSearching = false;
+  bool _hasData = false;
+  int _currentPage = 0;
+  bool _hasMoreResults = true;
+  String _lastQuery = '';
   Timer? _debouncer;
-  bool _searchIndexesReady = false;
-
-  final int _loadIncrement = 50; // Number of teams to load at a time
+  Timer? _progressTimer;
 
   @override
   void initState() {
     super.initState();
-    _initializeSearch();
+    _loadDataAsync();
     _searchController.addListener(_onSearchChanged);
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _scrollController.dispose();
     _debouncer?.cancel();
+    _progressTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _initializeSearch() async {
+  Future<void> _loadDataAsync() async {
     setState(() {
       _isLoading = true;
     });
 
-    // Try to load cached search indexes first
-    await TeamSearchService.initializeSearchIndexes();
-    
-    // Sync with latest data if needed
-    await TeamSyncService.syncTeamList();
-    
-    // Re-initialize search indexes with latest data
-    await TeamSearchService.initializeSearchIndexes();
-    
-    setState(() {
-      _searchIndexesReady = true;
-      _isLoading = false;
-    });
-    
-    // Perform initial search
-    _performSearch(_searchController.text);
+    try {
+      // Check if we need to download data first
+      final needsSync = await TeamSyncService.needsSync();
+      if (needsSync) {
+        print('📥 Team data needs sync, downloading...');
+        await TeamSyncService.syncTeamList();
+      }
+      
+      // Initialize optimized search
+      await OptimizedTeamSearch.initialize();
+      
+      if (mounted) {
+        final hasData = OptimizedTeamSearch.isReady();
+        final teamCount = OptimizedTeamSearch.getTeamCount();
+        print('🚀 Optimized search initialized: hasData=$hasData, teamCount=$teamCount');
+        print('🚀 Setting _hasData to: $hasData');
+        
+        setState(() {
+          _hasData = hasData;
+          _isLoading = false;
+        });
+        
+        print('🚀 After setState: _hasData=$_hasData, _isLoading=$_isLoading');
+        
+        // Start progress timer if not ready yet
+        if (!hasData) {
+          _startProgressTimer();
+        }
+        
+        // Show first page of results
+        _performSearch('');
+      }
+    } catch (e) {
+      print('❌ Error loading optimized search: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _onSearchChanged() {
@@ -80,26 +115,92 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
     });
   }
 
-  void _performSearch(String query) {
-    if (!_searchIndexesReady) return;
-    
-    setState(() {
-      _isSearching = true;
-    });
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreResults();
+    }
+  }
 
-    // Use optimized search service
-    _searchResults = TeamSearchService.searchTeams(query, limit: 200);
-    _displayedCount = (_searchResults.length < _loadIncrement) ? _searchResults.length : _loadIncrement;
-    
-    setState(() {
-      _isSearching = false;
+  void _startProgressTimer() {
+    _progressTimer?.cancel();
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (mounted) {
+        final isReady = OptimizedTeamSearch.isReady();
+        print('🔄 Progress timer: isReady=$isReady, _hasData=$_hasData');
+        if (isReady) {
+          timer.cancel();
+          print('🔄 Setting _hasData to true in progress timer');
+          setState(() {
+            _hasData = true;
+          });
+          print('🔄 After setState in timer: _hasData=$_hasData');
+        } else {
+          setState(() {
+            // Trigger rebuild to update progress (both download and indexing)
+          });
+        }
+      } else {
+        timer.cancel();
+      }
     });
   }
 
-  void _loadMoreTeams() {
+  void _performSearch(String query) {
+    print('🔍 _performSearch called with query: "$query"');
+    print('🔍 _hasData: $_hasData');
+    print('🔍 OptimizedTeamSearch.isReady(): ${OptimizedTeamSearch.isReady()}');
+    
+    if (!_hasData) {
+      print('❌ No data available for search');
+      return;
+    }
+    
     setState(() {
-      _displayedCount = (_displayedCount + _loadIncrement).clamp(0, _searchResults.length);
+      _isSearching = true;
+      _currentPage = 0;
+      _hasMoreResults = true;
+      _lastQuery = query;
     });
+
+    // Get first page of results
+    final results = OptimizedTeamSearch.search(query, page: 0);
+    print('🔍 Search results for "$query": ${results.length} teams');
+    if (results.isNotEmpty) {
+      print('🔍 First result: ${results[0]}');
+    } else {
+      print('🔍 No results found for query: "$query"');
+    }
+    
+    setState(() {
+      _currentResults = results;
+      _isSearching = false;
+      _hasMoreResults = results.length >= 50; // Assuming page size is 50
+    });
+    print('🔍 _currentResults length after setState: ${_currentResults.length}');
+    print('🔍 _currentResults content: $_currentResults');
+    
+    print('🔍 Search for "$query": ${results.length} results (page 0)');
+  }
+
+  void _loadMoreResults() {
+    if (!_hasMoreResults || _isSearching) return;
+    
+    setState(() {
+      _isSearching = true;
+      _currentPage++;
+    });
+
+    // Get next page
+    final moreResults = OptimizedTeamSearch.search(_lastQuery, page: _currentPage);
+    
+    setState(() {
+      _currentResults.addAll(moreResults);
+      _isSearching = false;
+      _hasMoreResults = moreResults.length >= 50; // Assuming page size is 50
+    });
+    
+    print('📄 Loaded page $_currentPage: ${moreResults.length} more results');
   }
 
   Future<void> _refreshTeamList() async {
@@ -108,13 +209,15 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
     });
     
     await TeamSyncService.syncTeamList();
-    await TeamSearchService.initializeSearchIndexes();
+    await OptimizedTeamSearch.initialize();
     
-    setState(() {
-      _isLoading = false;
-    });
-    
-    _performSearch(_searchController.text);
+    if (mounted) {
+      setState(() {
+        _hasData = OptimizedTeamSearch.isReady();
+        _isLoading = false;
+      });
+      _performSearch(_searchController.text);
+    }
   }
 
   void _onTeamTap(Map<String, dynamic> teamData) {
@@ -128,7 +231,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       region: teamData['region'] ?? '',
       country: teamData['country'] ?? '',
       grade: teamData['grade'] ?? '',
-      registered: true, // Assume registered if in master list
+      registered: true,
     );
 
     if (widget.onTeamSelected != null) {
@@ -145,19 +248,22 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Search bar
-        _buildSearchBar(),
+    print('🔍 OptimizedTeamSearchWidget build() called - _currentResults.length=${_currentResults.length}');
+    return SafeArea(
+      child: Column(
+        children: [
+          // Search bar
+          _buildSearchBar(),
 
-        // Sync status (optional)
-        if (widget.showSyncStatus) _buildSyncStatus(),
+          // Sync status (optional)
+          if (widget.showSyncStatus) _buildSyncStatus(),
 
-        // Search results
-        Expanded(
-          child: _buildSearchResults(),
-        ),
-      ],
+          // Search results
+          Flexible(
+            child: _buildSearchResults(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -172,13 +278,13 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       child: TextField(
         controller: _searchController,
         decoration: InputDecoration(
-          hintText: widget.hintText ?? 'Search teams by number, name, or location...',
+          hintText: widget.hintText ?? 'Search 26,000+ teams by number, name, or location...',
           hintStyle: AppConstants.bodyText2.copyWith(
-            color: AppConstants.textSecondary,
+            color: ThemeUtils.getSecondaryTextColor(context),
           ),
           prefixIcon: Icon(
             Icons.search,
-            color: AppConstants.textSecondary,
+            color: ThemeUtils.getSecondaryTextColor(context),
           ),
           suffixIcon: _isSearching
               ? const Padding(
@@ -191,13 +297,10 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                 )
               : _searchController.text.isNotEmpty
                   ? IconButton(
-                      icon: Icon(Icons.clear, color: AppConstants.textSecondary),
+                      icon: Icon(Icons.clear, color: Theme.of(context).iconTheme.color),
                       onPressed: () {
                         _searchController.clear();
-                        setState(() {
-                          _searchResults = [];
-                          _displayedCount = 0;
-                        });
+                        _performSearch('');
                       },
                     )
                   : null,
@@ -241,7 +344,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                 size: 16,
               ),
               const SizedBox(width: AppConstants.spacingS),
-              Expanded(
+              Flexible(
                 child: Text(
                   teamCount == 0
                       ? 'Team list not available yet. GitHub Action needs to run first.'
@@ -272,60 +375,95 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
   }
 
   Widget _buildSearchResults() {
-    if (_isLoading && !_searchIndexesReady) {
+    print('🔍 _buildSearchResults: _isLoading=$_isLoading, _hasData=$_hasData, _currentResults.length=${_currentResults.length}');
+    
+    if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (!_searchIndexesReady) {
+    if (!_hasData) {
+      // Check if we're downloading or indexing
+      final downloadProgress = TeamSyncService.getDownloadProgress();
+      final downloadStatus = TeamSyncService.getDownloadStatus();
+      final indexingProgress = OptimizedTeamSearch.getIndexingProgress();
+      final indexingStatus = OptimizedTeamSearch.getIndexingStatus();
+      final teamCount = OptimizedTeamSearch.getTeamCount();
+      
+      // If download is not complete, show download progress
+      if (downloadProgress < 1.0) {
+        return _buildLoadingState(
+          progress: downloadProgress,
+          status: downloadStatus,
+          teamCount: teamCount,
+          isDownloading: true,
+        );
+      } else {
+        // Show indexing progress
+        return _buildLoadingState(
+          progress: indexingProgress,
+          status: indexingStatus,
+          teamCount: teamCount,
+          isDownloading: false,
+        );
+      }
+    }
+
+    print('🔍 Empty state check: _currentResults.isEmpty=${_currentResults.isEmpty}, _searchController.text.isNotEmpty=${_searchController.text.isNotEmpty}, searchText="${_searchController.text}"');
+    
+    if (_currentResults.isEmpty && _searchController.text.isNotEmpty) {
+      print('🔍 Showing Check Again button for query: "${_searchController.text}"');
       return _buildEmptyState(
-        icon: Icons.download,
-        title: 'Download Team List',
-        message: 'Tap "Update" to download the full VEX IQ team list.',
-        actionButton: TextButton(
-          onPressed: _isLoading ? null : _refreshTeamList,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Update Now'),
+        icon: Icons.search_off,
+        title: 'No Teams Found',
+        message: 'Try a different team number or check the spelling.',
+        actionButton: ElevatedButton.icon(
+          onPressed: () {
+            print('🔍 Check Again button pressed! Search text: "${_searchController.text}"');
+            _performSearch(_searchController.text);
+          },
+          icon: const Icon(Icons.search),
+          label: const Text('Check Again'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppConstants.vexIQBlue,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          ),
         ),
       );
     }
 
-    if (_searchResults.isEmpty && _searchController.text.isNotEmpty) {
-      return _buildEmptyState(
-        icon: Icons.search_off,
-        title: 'No Teams Found',
-        message: 'Try a different search term or check the spelling.',
-      );
-    }
-
-    if (_searchResults.isEmpty && _searchController.text.isEmpty) {
+    if (_currentResults.isEmpty) {
       return _buildEmptyState(
         icon: Icons.group,
-        title: 'All Teams Loaded',
-        message: 'Start typing to search for teams.',
+        title: 'No Teams Available',
+        message: 'Team database is not loaded yet.',
       );
     }
 
     return ListView.builder(
-      itemCount: _displayedCount + (_displayedCount < _searchResults.length ? 1 : 0),
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      itemCount: _currentResults.length + (_hasMoreResults ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == _displayedCount) {
+        print('🔍 itemBuilder called: index=$index, _currentResults.length=${_currentResults.length}');
+        
+        if (index == _currentResults.length) {
+          // Load more button
+          print('🔍 Building load more button');
           return Padding(
             padding: const EdgeInsets.all(AppConstants.spacingM),
             child: Center(
-              child: TextButton(
-                onPressed: _loadMoreTeams,
-                child: const Text('Load More'),
-              ),
+              child: _isSearching
+                  ? const CircularProgressIndicator()
+                  : TextButton(
+                      onPressed: _loadMoreResults,
+                      child: const Text('Load More Teams'),
+                    ),
             ),
           );
         }
-        
-        final teamData = _searchResults[index];
+
+        final teamData = _currentResults[index];
+        print('🔍 Building team card for index $index: ${teamData['number']} - ${teamData['name']}');
         final team = Team(
           id: teamData['id'] ?? 0,
           number: teamData['number'] ?? '',
@@ -339,38 +477,46 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
           registered: true,
         );
 
-        return Card(
-          margin: const EdgeInsets.symmetric(
-            horizontal: AppConstants.spacingM,
-            vertical: AppConstants.spacingS,
-          ),
-          elevation: AppConstants.elevationS,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-            onTap: () => _onTeamTap(teamData),
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.spacingM),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+        return Consumer<UserSettings>(
+          builder: (context, userSettings, child) {
+            final isMyTeam = userSettings.myTeam == team.number;
+            
+            return Card(
+              margin: const EdgeInsets.symmetric(
+                vertical: AppConstants.spacingS,
+              ),
+              elevation: AppConstants.elevationS,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+                side: isMyTeam ? BorderSide(
+                  color: AppConstants.vexIQBlue,
+                  width: 2,
+                ) : BorderSide.none,
+              ),
+              color: isMyTeam ? AppConstants.vexIQBlue.withOpacity(0.1) : null,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+                onTap: () => _onTeamTap(teamData),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.spacingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        backgroundColor: AppConstants.vexIQOrange,
-                        radius: 24,
-                        child: Text(
-                          team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
-                          style: AppConstants.bodyText1.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: isMyTeam ? AppConstants.vexIQBlue : AppConstants.vexIQOrange,
+                            radius: 24,
+                            child: Text(
+                              team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
+                              style: AppConstants.bodyText1.copyWith(
+                                color: Theme.of(context).colorScheme.onPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
                       const SizedBox(width: AppConstants.spacingM),
-                      Expanded(
+                      Flexible(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -384,7 +530,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                               Text(
                                 team.name,
                                 style: AppConstants.bodyText1.copyWith(
-                                  color: AppConstants.textSecondary,
+                                  color: ThemeUtils.getSecondaryTextColor(context),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -393,7 +539,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                               Text(
                                 team.organization,
                                 style: AppConstants.caption.copyWith(
-                                  color: AppConstants.textSecondary,
+                                  color: ThemeUtils.getSecondaryTextColor(context),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -401,38 +547,40 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                           ],
                         ),
                       ),
-                      Consumer<UserSettings>(
-                        builder: (context, settings, child) {
-                          final isFavorite = settings.isFavoriteTeam(team.number);
-                          return IconButton(
-                            icon: Icon(
-                              isFavorite ? Icons.favorite : Icons.favorite_border,
-                              color: isFavorite ? Colors.red : AppConstants.textSecondary,
-                            ),
-                            onPressed: () async {
-                              if (isFavorite) {
-                                await settings.removeFavoriteTeam(team.number);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('${team.number} removed from favorites')),
-                                  );
+                      if (!widget.isSelectionMode) ...[
+                        Consumer<UserSettings>(
+                          builder: (context, settings, child) {
+                            final isFavorite = settings.isFavoriteTeam(team.number);
+                            return IconButton(
+                              icon: Icon(
+                                isFavorite ? Icons.favorite : Icons.favorite_border,
+                                color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                              ),
+                              onPressed: () async {
+                                if (isFavorite) {
+                                  await settings.removeFavoriteTeam(team.number);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('${team.number} removed from favorites')),
+                                    );
+                                  }
+                                } else {
+                                  await settings.addFavoriteTeam(team.number);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('${team.number} added to favorites')),
+                                    );
+                                  }
                                 }
-                              } else {
-                                await settings.addFavoriteTeam(team.number);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('${team.number} added to favorites')),
-                                  );
-                                }
-                              }
-                            },
-                          );
-                        },
-                      ),
-                      Icon(
-                        Icons.chevron_right,
-                        color: AppConstants.textSecondary,
-                      ),
+                              },
+                            );
+                          },
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          color: ThemeUtils.getSecondaryTextColor(context),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: AppConstants.spacingM),
@@ -460,11 +608,11 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                         const SizedBox(width: AppConstants.spacingS),
                       ],
                       if (team.city.isNotEmpty && team.region.isNotEmpty)
-                        Expanded(
+                        Flexible(
                           child: Text(
                             '${team.city}, ${team.region}',
                             style: AppConstants.caption.copyWith(
-                              color: AppConstants.textSecondary,
+                              color: ThemeUtils.getSecondaryTextColor(context),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -475,6 +623,8 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
               ),
             ),
           ),
+        );
+          },
         );
       },
     );
@@ -496,13 +646,13 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
             Icon(
               icon,
               size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
+              color: ThemeUtils.getVeryMutedTextColor(context),
             ),
             const SizedBox(height: AppConstants.spacingM),
             Text(
               title,
               style: AppConstants.headline6.copyWith(
-                color: AppConstants.textPrimary,
+                color: Theme.of(context).textTheme.titleLarge?.color,
               ),
               textAlign: TextAlign.center,
             ),
@@ -510,7 +660,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
             Text(
               message,
               style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),
@@ -518,6 +668,82 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
               const SizedBox(height: AppConstants.spacingM),
               actionButton,
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState({
+    required double progress,
+    required String status,
+    required int teamCount,
+    bool isDownloading = false,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingM),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isDownloading ? Icons.download : Icons.build,
+              size: 64,
+              color: AppConstants.vexIQBlue.withOpacity(0.7),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Text(
+              isDownloading ? 'Downloading Team Database' : 'Building Search Index',
+              style: AppConstants.headline6.copyWith(
+                color: Theme.of(context).textTheme.titleLarge?.color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              status,
+              style: AppConstants.bodyText2.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            // Progress bar
+            Container(
+              width: double.infinity,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppConstants.surfaceColor,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: AppConstants.borderColor),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: progress,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppConstants.vexIQBlue,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              '${(progress * 100).toInt()}%',
+              style: AppConstants.caption.copyWith(
+                color: AppConstants.vexIQBlue,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacingS),
+            Text(
+              '$teamCount teams loaded',
+              style: AppConstants.caption.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+              ),
+            ),
           ],
         ),
       ),

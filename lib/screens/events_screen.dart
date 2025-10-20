@@ -6,6 +6,7 @@ import 'package:stat_iq/services/robotevents_api.dart';
 // import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/constants/api_config.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _EventsScreenState extends State<EventsScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   
   List<Event> _events = [];
+  Map<String, List<Event>> _groupedEvents = {};
   bool _isLoading = false;
   bool _hasSearched = false;
   String _errorMessage = '';
@@ -30,9 +32,11 @@ class _EventsScreenState extends State<EventsScreen> {
   
   // Filter states
   List<String> _selectedRegions = [];
-  String _selectedTimeFrame = 'All Time';
-  String _selectedEventType = 'All Types';
+  String _selectedTimeFrame = 'This Season';
   bool _sortEarliestFirst = true;
+  
+  // API filter states (Bug Patch 3 requirement) - consolidated into single event level filter
+  List<String> _selectedEventLevels = [];
 
   @override
   void initState() {
@@ -63,6 +67,133 @@ class _EventsScreenState extends State<EventsScreen> {
     }
   }
 
+  Map<String, List<Event>> _groupEventsByWeek(List<Event> events) {
+    final Map<String, List<Event>> weekGroups = {};
+    
+    for (final event in events) {
+      if (event.start != null) {
+        final weekEnding = _getWeekEnding(event.start!);
+        weekGroups.putIfAbsent(weekEnding, () => []).add(event);
+      }
+    }
+    
+    // Sort events within each week
+    for (final week in weekGroups.keys) {
+      weekGroups[week]!.sort((a, b) {
+        if (a.start == null && b.start == null) return 0;
+        if (a.start == null) return 1;
+        if (b.start == null) return -1;
+        
+        if (_sortEarliestFirst) {
+          return a.start!.compareTo(b.start!);
+        } else {
+          return b.start!.compareTo(a.start!);
+        }
+      });
+    }
+    
+    return weekGroups;
+  }
+  
+  String _getWeekEnding(DateTime date) {
+    // Calculate the Sunday that ends the week
+    final daysUntilSunday = 7 - date.weekday;
+    final weekEnding = date.add(Duration(days: daysUntilSunday));
+    
+    // Format as "Week ending M/d"
+    final month = weekEnding.month;
+    final day = weekEnding.day;
+    return 'Week ending $month/$day';
+  }
+
+  List<Event> _applyClientSideFilters(List<Event> events) {
+    List<Event> filteredEvents = List.from(events);
+
+    // Apply region filter (can't be done via API)
+    if (_selectedRegions.isNotEmpty) {
+      filteredEvents = filteredEvents.where((event) {
+        final eventRegion = _getEventRegion(event);
+        return _selectedRegions.contains(eventRegion);
+      }).toList();
+    }
+
+    // Apply time frame filter (can't be done via API)
+      final now = DateTime.now();
+      filteredEvents = filteredEvents.where((event) {
+        final eventDate = event.start;
+        if (eventDate == null) return false;
+
+        switch (_selectedTimeFrame) {
+          case 'This Week':
+            final weekStart = now.subtract(Duration(days: now.weekday - 1));
+            final weekEnd = weekStart.add(const Duration(days: 7));
+            return eventDate.isAfter(weekStart) && eventDate.isBefore(weekEnd);
+          case 'This Month':
+            final monthStart = DateTime(now.year, now.month, 1);
+            final monthEnd = DateTime(now.year, now.month + 1, 1);
+            return eventDate.isAfter(monthStart) && eventDate.isBefore(monthEnd);
+          case 'Next Month':
+            final nextMonthStart = DateTime(now.year, now.month + 1, 1);
+            final nextMonthEnd = DateTime(now.year, now.month + 2, 1);
+            return eventDate.isAfter(nextMonthStart) && eventDate.isBefore(nextMonthEnd);
+          case 'This Season':
+            // For VEX IQ, season typically runs from August to May
+          // But when a different season is selected, show all events from that season
+          if (_selectedSeasonId != 196) { // Not current season
+            return true; // Show all events for past seasons
+          }
+            final seasonStart = DateTime(now.year, 8, 1);
+            final seasonEnd = DateTime(now.year + 1, 6, 1);
+            return eventDate.isAfter(seasonStart) && eventDate.isBefore(seasonEnd);
+          default:
+            return true;
+        }
+      }).toList();
+
+    // Event type filtering is now done via API using level_class_id
+    // No need for client-side event type filtering
+
+    return filteredEvents;
+  }
+
+  String _getEventRegion(Event event) {
+    final country = event.country ?? '';
+    final region = event.region ?? '';
+    
+    // Return the most specific region available
+    if (region.isNotEmpty) {
+      return region;
+    }
+    
+    // If no specific region, return country
+    if (country.isNotEmpty) {
+      return country;
+    }
+    
+    return 'Unknown';
+  }
+
+  String _getEventType(Event event) {
+    final name = event.name?.toLowerCase() ?? '';
+    final levelClass = event.levelClassName?.toLowerCase() ?? '';
+    
+    if (name.contains('world') || name.contains('championship') || 
+        name.contains('us open') || name.contains('vex worlds')) {
+      return 'Important (US Open, Worlds)';
+    } else if (name.contains('regional') || name.contains('state') || 
+               name.contains('provincial') || name.contains('national')) {
+      return 'Regional/States';
+    } else if (name.contains('school') || name.contains('district') ||
+               levelClass.contains('school')) {
+      return 'School-Only';
+    } else if (name.contains('signature') || name.contains('expo') ||
+               name.contains('showcase')) {
+      return 'Signature';
+    } else {
+      return 'Local';
+    }
+  }
+
   Future<void> _loadRecentEvents() async {
     setState(() {
       _isLoading = true;
@@ -71,17 +202,22 @@ class _EventsScreenState extends State<EventsScreen> {
     });
 
     try {
-      // Load events from selected season
+      // Load events from selected season with API filters
       final events = await RobotEventsAPI.searchEvents(
         seasonId: _selectedSeasonId,
+        levels: _selectedEventLevels.isNotEmpty ? _selectedEventLevels : null,
         page: 1,
       );
 
+      // Apply only client-side filters that can't be done via API
+      final filteredEvents = _applyClientSideFilters(events);
+
       setState(() {
-        _events = events;
+        _events = filteredEvents;
+        _groupedEvents = _groupEventsByWeek(filteredEvents);
         _isLoading = false;
-        if (events.isEmpty) {
-          _errorMessage = 'No recent events found for $_selectedSeason';
+        if (filteredEvents.isEmpty) {
+          _errorMessage = 'No events found matching your filters for $_selectedSeason';
         }
       });
     } catch (e) {
@@ -89,6 +225,7 @@ class _EventsScreenState extends State<EventsScreen> {
         _isLoading = false;
         _errorMessage = 'Error loading events: ${e.toString()}';
         _events = [];
+        _groupedEvents = {};
       });
     }
   }
@@ -116,12 +253,15 @@ class _EventsScreenState extends State<EventsScreen> {
       
       print('🔍 Events Screen: Query contains season info: $hasSeasonInfo');
       print('🔍 Events Screen: Selected season ID: $_selectedSeasonId');
-      print('🔍 Events Screen: Query: "$query"');
+      print('🔍 Events Screen: Query: "$query" (length: ${query.trim().length})');
       print('🔍 Events Screen: Will pass seasonId: ${hasSeasonInfo ? null : _selectedSeasonId}');
+      print('🔍 Events Screen: Making API call to confirm results...');
       
+      // Always make API call for non-empty queries to confirm results
       final events = await RobotEventsAPI.searchEvents(
         query: query.trim().isEmpty ? null : query.trim(),
         seasonId: hasSeasonInfo ? null : _selectedSeasonId, // Let auto-detection work if query has season
+        levels: _selectedEventLevels.isNotEmpty ? _selectedEventLevels : null,
       );
       
       print('🔍 Events Screen: Found ${events.length} events');
@@ -129,12 +269,82 @@ class _EventsScreenState extends State<EventsScreen> {
         print('🔍 Events Screen: First event: ${events.first.name}');
       }
 
+      // Apply only client-side filters that can't be done via API
+      final filteredEvents = _applyClientSideFilters(events);
+
+      // If no events found, try additional searches to confirm no results exist
+      if (filteredEvents.isEmpty && query.trim().isNotEmpty) {
+        print('🔍 No events found, trying additional search confirmations...');
+        
+        // Try team search fallback
+        try {
+          print('🔍 Trying exact team search for: "${query.trim()}"');
+          final teams = await RobotEventsAPI.searchTeams(teamNumber: query.trim());
+          print('🔍 Exact team search found ${teams.length} teams');
+          
+          if (teams.isNotEmpty) {
+            // If teams are found, show a message suggesting to search for teams instead
+            setState(() {
+              _events = [];
+              _groupedEvents = {};
+              _isLoading = false;
+              _errorMessage = 'No events found for "$query", but ${teams.length} team(s) were found. Try searching for teams instead.';
+            });
+            return;
+          }
+          
+          // Try searching without season filter for teams
+          if (query.trim().length > 1) {
+            print('🔍 Trying team search without season filter for: "${query.trim()}"');
+            final teamsNoSeason = await RobotEventsAPI.searchTeams(teamNumber: query.trim(), seasonId: null);
+            print('🔍 Team search without season found ${teamsNoSeason.length} teams');
+            
+            if (teamsNoSeason.isNotEmpty) {
+              setState(() {
+                _events = [];
+                _groupedEvents = {};
+                _isLoading = false;
+                _errorMessage = 'No events found for "$query", but ${teamsNoSeason.length} team(s) were found (including other seasons). Try searching for teams instead.';
+              });
+              return;
+            }
+          }
+        } catch (e) {
+          print('🔍 Team search fallback failed: $e');
+        }
+        
+        // Try a broader event search without filters to confirm no results exist
+        try {
+          print('🔍 Trying broader event search without filters...');
+          final broaderEvents = await RobotEventsAPI.searchEvents(
+            query: query.trim(),
+            seasonId: null, // Try without season filter
+            levels: _selectedEventLevels.isNotEmpty ? _selectedEventLevels : null,
+          );
+          print('🔍 Broader search found ${broaderEvents.length} events');
+          
+          if (broaderEvents.isNotEmpty) {
+            // If broader search found events, it means filters are too restrictive
+            setState(() {
+              _events = [];
+              _groupedEvents = {};
+              _isLoading = false;
+              _errorMessage = 'No events found for "$query" with current filters. Try adjusting your filters or search terms.';
+            });
+            return;
+          }
+        } catch (e) {
+          print('🔍 Broader search failed: $e');
+        }
+      }
+
       setState(() {
-        _events = events;
+        _events = filteredEvents;
+        _groupedEvents = _groupEventsByWeek(filteredEvents);
         _isLoading = false;
-        if (events.isEmpty) {
+        if (filteredEvents.isEmpty) {
           final searchTerm = query.trim().isEmpty ? 'recent events' : '"$query"';
-          _errorMessage = 'No events found for $searchTerm in $_selectedSeason';
+          _errorMessage = 'No events found for $searchTerm matching your filters in $_selectedSeason. API search confirmed no results.';
           } else {
             _errorMessage = ''; // Clear error message when events are found
         }
@@ -144,6 +354,7 @@ class _EventsScreenState extends State<EventsScreen> {
         _isLoading = false;
         _errorMessage = 'Error searching events: ${e.toString()}';
         _events = [];
+        _groupedEvents = {};
       });
     }
   }
@@ -154,8 +365,6 @@ class _EventsScreenState extends State<EventsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSeasonSelector(),
-          const SizedBox(height: AppConstants.spacingM),
           _buildSearchBar(),
           const SizedBox(height: AppConstants.spacingM),
           _buildFilterButtons(),
@@ -170,12 +379,12 @@ class _EventsScreenState extends State<EventsScreen> {
       focusNode: _searchFocusNode,
       decoration: InputDecoration(
         hintText: 'Search by name & location',
-        prefixIcon: _searchController.text.isEmpty 
-            ? null 
-            : Icon(
-                Icons.search,
-                color: AppConstants.vexIQOrange,
-              ),
+        prefixIcon: Icon(
+          Icons.search,
+          color: _searchController.text.isEmpty 
+              ? ThemeUtils.getSecondaryTextColor(context) 
+              : AppConstants.vexIQOrange,
+        ),
         suffixIcon: _searchController.text.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.clear),
@@ -209,7 +418,7 @@ class _EventsScreenState extends State<EventsScreen> {
   Widget _buildFilterButtons() {
     return Row(
       children: [
-        // Region filter
+        // Region filter (Globe icon)
         Expanded(
           child: _buildFilterButton(
             icon: Icons.public,
@@ -218,7 +427,7 @@ class _EventsScreenState extends State<EventsScreen> {
           ),
         ),
         const SizedBox(width: AppConstants.spacingS),
-        // Time frame filter
+        // Time frame filter (Calendar icon)
         Expanded(
           child: _buildFilterButton(
             icon: Icons.calendar_today,
@@ -227,12 +436,14 @@ class _EventsScreenState extends State<EventsScreen> {
           ),
         ),
         const SizedBox(width: AppConstants.spacingS),
-        // Event type filter
+        // Event level filter (Event Level with dropdown arrow)
         Expanded(
           child: _buildFilterButton(
             icon: Icons.category,
-            label: _selectedEventType,
-            onTap: _showEventTypeFilter,
+            label: _selectedEventLevels.isEmpty 
+                ? 'Filter by event level ▼' 
+                : '${_selectedEventLevels.length} Level${_selectedEventLevels.length == 1 ? '' : 's'} ▼',
+            onTap: _showEventLevelFilter,
           ),
         ),
       ],
@@ -277,7 +488,7 @@ class _EventsScreenState extends State<EventsScreen> {
             Icon(
               Icons.keyboard_arrow_down,
               size: 16,
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ],
         ),
@@ -285,69 +496,6 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
   
-  Widget _buildSeasonSelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacingM,
-        vertical: AppConstants.spacingS,
-      ),
-      decoration: BoxDecoration(
-        color: AppConstants.vexIQBlue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-        border: Border.all(color: AppConstants.vexIQBlue.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.event_note,
-            color: AppConstants.vexIQBlue,
-            size: 20,
-          ),
-          const SizedBox(width: AppConstants.spacingS),
-          Text(
-            'Season:',
-            style: AppConstants.bodyText2.copyWith(
-              fontWeight: FontWeight.w600,
-              color: AppConstants.vexIQBlue,
-            ),
-          ),
-          const SizedBox(width: AppConstants.spacingS),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedSeason,
-                icon: Icon(
-                  Icons.arrow_drop_down,
-                  color: AppConstants.vexIQBlue,
-                ),
-                style: AppConstants.bodyText2.copyWith(
-                  color: AppConstants.vexIQBlue,
-                  fontWeight: FontWeight.w600,
-                ),
-                items: ApiConfig.availableSeasons.keys.map((String seasonName) {
-                  return DropdownMenuItem<String>(
-                    value: seasonName,
-                    child: Text(
-                      seasonName,
-                      style: AppConstants.bodyText2.copyWith(
-                        color: AppConstants.textPrimary,
-                      ),
-                    ),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    final seasonId = ApiConfig.availableSeasons[newValue]!['vexiq']!;
-                    _onSeasonChanged(newValue, seasonId);
-                  }
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildApiStatusBanner() {
     if (!ApiConfig.isApiKeyConfigured) {
@@ -420,19 +568,46 @@ class _EventsScreenState extends State<EventsScreen> {
                     Text(
                   _errorMessage,
                       style: AppConstants.bodyText2.copyWith(
-                        color: AppConstants.textSecondary,
+                        color: ThemeUtils.getSecondaryTextColor(context),
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppConstants.spacingM),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
                 ElevatedButton.icon(
                   onPressed: () => _loadRecentEvents(),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppConstants.vexIQOrange,
-                    foregroundColor: Colors.white,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    ),
+                    if (_hasSearched) ...[
+                      const SizedBox(width: AppConstants.spacingS),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          print('🔍 Events Check Again button pressed! Search text: "${_searchController.text}"');
+                          // If search text is empty, reload recent events, otherwise search again
+                          if (_searchController.text.trim().isEmpty) {
+                            print('🔍 Loading recent events...');
+                            _loadRecentEvents();
+                          } else {
+                            print('🔍 Searching events again...');
+                            _searchEvents(_searchController.text);
+                          }
+                        },
+                        icon: const Icon(Icons.search),
+                        label: const Text('Check Again'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppConstants.vexIQBlue,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   ),
+                ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -470,7 +645,7 @@ class _EventsScreenState extends State<EventsScreen> {
           Text(
                 'Comprehensive Search in Progress',
                 style: AppConstants.headline6.copyWith(
-              color: AppConstants.textPrimary,
+              color: Theme.of(context).textTheme.titleLarge?.color,
                   fontWeight: FontWeight.bold,
             ),
           ),
@@ -478,7 +653,7 @@ class _EventsScreenState extends State<EventsScreen> {
               Text(
                 'Searching through all events...',
                 style: AppConstants.bodyText1.copyWith(
-                  color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
             ),
                 textAlign: TextAlign.center,
               ),
@@ -544,20 +719,20 @@ class _EventsScreenState extends State<EventsScreen> {
           Icon(
                 Icons.event_busy,
             size: 64,
-                color: AppConstants.textSecondary.withOpacity(0.5),
+                color: ThemeUtils.getVeryMutedTextColor(context),
           ),
           const SizedBox(height: AppConstants.spacingM),
           Text(
                 'No Events Found',
                 style: AppConstants.headline6.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingS),
           Text(
                 'Try a different search term or check back later',
             style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
             textAlign: TextAlign.center,
           ),
@@ -573,9 +748,15 @@ class _EventsScreenState extends State<EventsScreen> {
         color: AppConstants.vexIQOrange,
         child: ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingM),
-          itemCount: _events.length,
+          itemCount: _getTotalItemCount(),
           itemBuilder: (context, index) {
-            final event = _events[index];
+            final item = _getItemAtIndex(index);
+            if (item is String) {
+              // This is a week header
+              return _buildWeekHeader(item);
+            } else {
+              // This is an event
+              final event = item as Event;
             return Card(
               margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
               child: InkWell(
@@ -614,7 +795,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                   Text(
                                     _getEventLocation(event),
                                     style: AppConstants.caption.copyWith(
-                                      color: AppConstants.textSecondary,
+                                      color: ThemeUtils.getSecondaryTextColor(context),
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -660,7 +841,7 @@ class _EventsScreenState extends State<EventsScreen> {
                               Text(
                                 _getEventTypeName(event.name),
                                 style: AppConstants.caption.copyWith(
-                                  color: AppConstants.textSecondary,
+                                  color: ThemeUtils.getSecondaryTextColor(context),
                                 ),
                               ),
                             ],
@@ -675,7 +856,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                   return IconButton(
                                     icon: Icon(
                                       isFavorite ? Icons.favorite : Icons.favorite_border,
-                                      color: isFavorite ? Colors.red : AppConstants.textSecondary,
+                                      color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
                                       size: 20,
                                     ),
                                     onPressed: () async {
@@ -700,7 +881,7 @@ class _EventsScreenState extends State<EventsScreen> {
                               ),
                               Icon(
                                 Icons.chevron_right,
-                                color: AppConstants.textSecondary,
+                                color: ThemeUtils.getSecondaryTextColor(context),
                                 size: 20,
                               ),
                             ],
@@ -712,128 +893,56 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               ),
             );
+            }
           },
         ),
       ),
     );
   }
 
-  void _showRegionFilter() {
-    final regions = [
-      'North America',
-      'Europe',
-      'Asia',
-      'South America',
-      'Africa',
-      'Oceania',
-    ];
-    
+  void _showSortOptions() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Select Regions'),
-        content: StatefulBuilder(
-          builder: (context, setState) {
-            return Column(
+        title: const Text('Sort Events'),
+        content: Column(
               mainAxisSize: MainAxisSize.min,
-              children: regions.map((region) {
-                final isSelected = _selectedRegions.contains(region);
-                return CheckboxListTile(
-                  title: Text(region),
-                  value: isSelected,
+          children: [
+            RadioListTile<bool>(
+              title: Row(
+                children: [
+                  Icon(Icons.keyboard_arrow_up, color: AppConstants.vexIQOrange),
+                  const SizedBox(width: 8),
+                  const Text('Earliest First'),
+                ],
+              ),
+              value: true,
+              groupValue: _sortEarliestFirst,
                   onChanged: (value) {
                     setState(() {
-                      if (value == true) {
-                        _selectedRegions.add(region);
-                      } else {
-                        _selectedRegions.remove(region);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
-            );
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {});
-              Navigator.pop(context);
-              _applyFilters();
-            },
-            child: const Text('Apply'),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  void _showTimeFrameFilter() {
-    final timeFrames = [
-      'All Time',
-      'This Week',
-      'This Month',
-      'Next Month',
-      'This Season',
-    ];
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Time Frame'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...timeFrames.map((timeFrame) {
-              return RadioListTile<String>(
-                title: Text(timeFrame),
-                value: timeFrame,
-                groupValue: _selectedTimeFrame,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedTimeFrame = value!;
-                  });
-                  Navigator.pop(context);
-                  _applyFilters();
-                },
-              );
-            }),
-            const Divider(),
-            Row(
-              children: [
-                const Text('Sort: '),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Radio<bool>(
-                        value: true,
-                        groupValue: _sortEarliestFirst,
-                        onChanged: (value) {
-                          setState(() {
-                            _sortEarliestFirst = value!;
-                          });
-                        },
-                      ),
-                      const Text('Earliest'),
-                      Radio<bool>(
-                        value: false,
-                        groupValue: _sortEarliestFirst,
-                        onChanged: (value) {
-                          setState(() {
-                            _sortEarliestFirst = value!;
-                          });
-                        },
-                      ),
-                      const Text('Latest'),
-                    ],
-                  ),
-                ),
-              ],
+                  _sortEarliestFirst = value!;
+                });
+                _refreshGrouping();
+                Navigator.pop(context);
+              },
+            ),
+            RadioListTile<bool>(
+              title: Row(
+                children: [
+                  Icon(Icons.keyboard_arrow_down, color: AppConstants.vexIQOrange),
+                  const SizedBox(width: 8),
+                  const Text('Latest First'),
+                ],
+              ),
+              value: false,
+              groupValue: _sortEarliestFirst,
+              onChanged: (value) {
+                setState(() {
+                  _sortEarliestFirst = value!;
+                });
+                _refreshGrouping();
+                Navigator.pop(context);
+              },
             ),
           ],
         ),
@@ -846,34 +955,25 @@ class _EventsScreenState extends State<EventsScreen> {
       ),
     );
   }
-  
-  void _showEventTypeFilter() {
-    final eventTypes = [
-      'All Types',
-      'Local',
-      'School-Only',
-      'Regional/States',
-      'Signature',
-      'Important (US Open, Worlds)',
-    ];
-    
+
+  void _showSeasonSelector() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Select Event Type'),
+        title: const Text('Select Season'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: eventTypes.map((eventType) {
+          children: ApiConfig.availableSeasons.keys.map((String seasonName) {
             return RadioListTile<String>(
-              title: Text(eventType),
-              value: eventType,
-              groupValue: _selectedEventType,
+              title: Text(seasonName),
+              value: seasonName,
+              groupValue: _selectedSeason,
               onChanged: (value) {
-                setState(() {
-                  _selectedEventType = value!;
-                });
-                Navigator.pop(context);
-                _applyFilters();
+                if (value != null) {
+                  final seasonId = ApiConfig.availableSeasons[value]!['vexiq']!;
+                  _onSeasonChanged(value, seasonId);
+                }
+              Navigator.pop(context);
               },
             );
           }).toList(),
@@ -888,12 +988,327 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
   
-  void _applyFilters() {
-    // Apply filters to the current event list
-    // This would filter the _events list based on selected criteria
+  void _showRegionFilter() {
+    final allVexIQRegions = [
+      // North America - US States
+      'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California - North', 'California - South',
+      'Colorado', 'Connecticut', 'Delaware', 'Florida - North/Central', 'Florida - South',
+      'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana - Region 1 - North',
+      'Indiana - Region 2 - Central', 'Indiana - Region 3 - South', 'Iowa', 'Kansas',
+      'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
+      'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
+      'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina',
+      'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island',
+      'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
+      'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
+      'District of Columbia', 'Delmarva',
+      
+      // Canada
+      'Alberta/Saskatchewan', 'British Columbia', 'British Columbia (BC)', 'Manitoba',
+      'New Brunswick', 'Newfoundland and Labrador', 'Northwest Territories',
+      'Nova Scotia', 'Nunavut', 'Ontario', 'Prince Edward Island', 'Quebec',
+      'Saskatchewan', 'Yukon',
+      
+      // Mexico
+      'Mexico',
+      
+      // Europe
+      'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Czech Republic', 'Denmark',
+      'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland',
+      'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Netherlands', 'Norway',
+      'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain',
+      'Sweden', 'Switzerland', 'United Kingdom',
+      
+      // Asia
+      'China', 'East China', 'West China', 'North China', 'Middle China',
+      'Hong Kong', 'India', 'Indonesia', 'Japan', 'Kazakhstan', 'Kuwait',
+      'Malaysia', 'Philippines', 'Singapore', 'South Korea', 'Thailand',
+      'United Arab Emirates', 'Vietnam', 'Chinese Taipei',
+      
+      // South America
+      'Argentina', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Ecuador',
+      'Paraguay', 'Peru', 'Uruguay', 'Venezuela',
+      
+      // Middle East & Africa
+      'Bahrain', 'Egypt', 'Israel', 'Jordan', 'Lebanon', 'Morocco',
+      'Qatar', 'Saudi Arabia', 'South Africa', 'Turkey',
+      
+      // Oceania
+      'Australia', 'New Zealand', 'Fiji', 'Papua New Guinea',
+      
+      // Other
+      'Afghanistan', 'Albania', 'Algeria', 'American Samoa', 'Andorra',
+      'Angola', 'Antigua and Barbuda', 'Armenia', 'Aruba', 'Azerbaijan',
+      'Bahamas', 'Bangladesh', 'Barbados', 'Belarus', 'Belize', 'Benin',
+      'Bermuda', 'Bhutan', 'Bosnia and Herzegovina', 'Botswana', 'Brunei',
+      'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada',
+      'Cape Verde', 'Cayman Islands', 'Central African Republic', 'Chad',
+      'Comoros', 'Congo', 'Cook Islands', 'Costa Rica', 'Cuba', 'Cyprus',
+      'Democratic Republic of the Congo', 'Djibouti', 'Dominican Republic',
+      'East Timor', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Eswatini',
+      'Ethiopia', 'Falkland Islands', 'French Guiana', 'French Polynesia',
+      'French Southern and Antarctic Territories', 'Gabon', 'Gambia',
+      'Georgia- Country', 'Ghana', 'Greenland', 'Guam', 'Guatemala',
+      'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Iraq',
+      'Jamaica', 'Kenya', 'Kiribati', 'Kosovo', 'Kyrgyzstan', 'Laos',
+      'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Luxembourg',
+      'Macedonia', 'Madagascar', 'Malawi', 'Maldives', 'Mali', 'Malta',
+      'Marshall Islands', 'Mauritania', 'Mauritius', 'Micronesia',
+      'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Mozambique', 'Myanmar',
+      'Namibia', 'Nauru', 'Nepal', 'Nicaragua', 'Niger', 'Nigeria',
+      'Niue', 'North Korea', 'Northern Mariana Islands', 'Oman', 'Palau',
+      'Panama', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia',
+      'Saint Vincent and the Grenadines', 'Samoa', 'San Marino',
+      'Sao Tome and Principe', 'Senegal', 'Serbia', 'Seychelles',
+      'Sierra Leone', 'Solomon Islands', 'Somalia', 'South Sudan',
+      'Sri Lanka', 'Sudan', 'Suriname', 'Swaziland', 'Syria', 'Tajikistan',
+      'Tanzania', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia',
+      'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'Uzbekistan',
+      'Vanuatu', 'Vatican City', 'Yemen', 'Zambia', 'Zimbabwe'
+    ];
+    
+    final TextEditingController searchController = TextEditingController();
+    List<String> filteredRegions = List.from(allVexIQRegions);
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final keyboardHeight = mediaQuery.viewInsets.bottom;
+        final availableHeight = mediaQuery.size.height - keyboardHeight;
+        
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Select VEX IQ Regions'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: (availableHeight * 0.7).clamp(400.0, 600.0),
+              child: Column(
+          children: [
+                  // Search bar
+                  TextField(
+                    controller: searchController,
+                    decoration: const InputDecoration(
+                      hintText: 'Search regions...',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                onChanged: (value) {
+                  setState(() {
+                        filteredRegions = allVexIQRegions
+                            .where((region) => region.toLowerCase().contains(value.toLowerCase()))
+                            .toList();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  // Clear all / Select all buttons
+            Row(
+              children: [
+                Expanded(
+                        child: TextButton(
+                          onPressed: () {
+                          setState(() {
+                              _selectedRegions.clear();
+                          });
+                        },
+                          child: const Text('Clear All'),
+                        ),
+                      ),
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () {
+                          setState(() {
+                              _selectedRegions = List.from(filteredRegions);
+                          });
+                        },
+                          child: const Text('Select All'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Region list
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filteredRegions.length,
+                      itemBuilder: (context, index) {
+                        final region = filteredRegions[index];
+                final isSelected = _selectedRegions.contains(region);
+                return CheckboxListTile(
+                          title: Text(
+                            region,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                  value: isSelected,
+                  onChanged: (value) {
+                    setState(() {
+                      if (value == true) {
+                        _selectedRegions.add(region);
+                      } else {
+                        _selectedRegions.remove(region);
+                      }
+                    });
+                  },
+            );
+          },
+                    ),
+                  ),
+                ],
+              ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {});
+              Navigator.pop(context);
+              _refreshWithFilters();
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+            );
+          },
+        );
+      },
+    );
+  }
+  
+  void _showTimeFrameFilter() {
+    final timeFrames = [
+      'This Week',
+      'This Month',
+      'Next Month',
+      'This Season',
+    ];
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final keyboardHeight = mediaQuery.viewInsets.bottom;
+        final availableHeight = mediaQuery.size.height - keyboardHeight;
+        
+        return AlertDialog(
+          title: const Text('Select Time Frame'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: (availableHeight * 0.4).clamp(200.0, 400.0),
+          child: Column(
+          children: [
+            ...timeFrames.map((timeFrame) {
+            return RadioListTile<String>(
+                  title: Text(
+                    timeFrame,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                value: timeFrame,
+                groupValue: _selectedTimeFrame,
+              onChanged: (value) {
+                setState(() {
+                    _selectedTimeFrame = value!;
+                });
+                Navigator.pop(context);
+                _refreshWithFilters();
+              },
+            );
+            }),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+        );
+      },
+    );
+  }
+  
+  
+  void _refreshWithFilters() {
+    // Refresh events with current filters applied
+    if (_searchController.text.trim().isNotEmpty) {
+      _searchEvents(_searchController.text);
+    } else {
+      _loadRecentEvents();
+    }
+  }
+  
+  void _refreshGrouping() {
+    // Refresh grouping when sort order changes
     setState(() {
-      // Filter logic would go here
+      _groupedEvents = _groupEventsByWeek(_events);
     });
+  }
+  
+  int _getTotalItemCount() {
+    int count = 0;
+    for (final week in _groupedEvents.keys) {
+      count += 1; // Week header
+      count += _groupedEvents[week]!.length; // Events in week
+    }
+    return count;
+  }
+  
+  dynamic _getItemAtIndex(int index) {
+    int currentIndex = 0;
+    for (final week in _groupedEvents.keys.toList()..sort()) {
+      if (currentIndex == index) {
+        return week; // Week header
+      }
+      currentIndex++;
+      
+      final eventsInWeek = _groupedEvents[week]!;
+      if (index < currentIndex + eventsInWeek.length) {
+        return eventsInWeek[index - currentIndex]; // Event
+      }
+      currentIndex += eventsInWeek.length;
+    }
+    return null;
+  }
+  
+  Widget _buildWeekHeader(String weekEnding) {
+    final eventCount = _groupedEvents[weekEnding]!.length;
+    return Container(
+      margin: const EdgeInsets.only(top: AppConstants.spacingM, bottom: AppConstants.spacingS),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.spacingM,
+        vertical: AppConstants.spacingS,
+      ),
+      decoration: BoxDecoration(
+        color: AppConstants.vexIQBlue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        border: Border.all(color: AppConstants.vexIQBlue.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.calendar_view_week,
+            color: AppConstants.vexIQBlue,
+            size: 20,
+          ),
+          const SizedBox(width: AppConstants.spacingS),
+          Text(
+            '$weekEnding ($eventCount ${eventCount == 1 ? 'event' : 'events'})',
+            style: AppConstants.bodyText1.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppConstants.vexIQBlue,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Color _getEventTypeColor(String eventName) {
@@ -987,9 +1402,17 @@ class _EventsScreenState extends State<EventsScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: AppConstants.textPrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.schedule),
+            onPressed: _showSeasonSelector,
+            tooltip: 'Select Season',
+          ),
+          IconButton(
+            icon: const Icon(Icons.access_time),
+            onPressed: _showSortOptions,
+            tooltip: 'Sort by Date',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _isLoading ? null : () => _loadRecentEvents(),
@@ -1004,6 +1427,104 @@ class _EventsScreenState extends State<EventsScreen> {
           Expanded(child: _buildEventsList()),
         ],
       ),
+    );
+  }
+
+  void _showEventLevelFilter() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final keyboardHeight = mediaQuery.viewInsets.bottom;
+        final availableHeight = mediaQuery.size.height - keyboardHeight;
+        
+        return AlertDialog(
+          title: const Text('Filter by Event Level'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: (availableHeight * 0.8).clamp(400.0, 700.0), // Increased height for better usability
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            _selectedEventLevels = List.from(ApiConfig.availableEventLevels);
+                          });
+                        },
+                        child: const Text('Select All'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            _selectedEventLevels.clear();
+                          });
+                        },
+                        child: const Text('Clear All'),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: ApiConfig.availableEventLevels.length,
+                      itemBuilder: (context, index) {
+                        final level = ApiConfig.availableEventLevels[index];
+                        final isSelected = _selectedEventLevels.contains(level);
+                        
+                        // Display name mapping for UI
+                        String displayName = level;
+                        if (level == 'State') {
+                          displayName = 'Regional Championships';
+                        } else if (level == 'National') {
+                          displayName = 'National Championships';
+                        } else if (level == 'Signature') {
+                          displayName = 'Signature Events';
+                        } else if (level == 'World') {
+                          displayName = 'Worlds';
+                        } else if (level == 'Other') {
+                          displayName = 'All';
+                        }
+                        
+                        return CheckboxListTile(
+                          title: Text(displayName),
+                          value: isSelected,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              if (value == true) {
+                                _selectedEventLevels.add(level);
+                              } else {
+                                _selectedEventLevels.remove(level);
+                              }
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadRecentEvents(); // Reload events with new filter
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+        );
+      },
     );
   }
 } 

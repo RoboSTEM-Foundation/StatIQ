@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import '../models/team.dart';
 import '../services/vex_iq_scoring.dart';
 import '../services/robotevents_api.dart';
@@ -127,7 +128,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
             SizedBox(width: AppConstants.spacingS),
-            Text('Calculating statIQ Score™...'),
+            Text('Calculating statIQ Score...'),
           ],
         ),
       );
@@ -169,9 +170,9 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
                   borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
                 ),
                 child: Text(
-                  'statIQ Score™',
+                  'statIQ Score',
                   style: AppConstants.caption.copyWith(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -235,7 +236,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
           'Score Breakdown',
           style: AppConstants.bodyText1.copyWith(
             fontWeight: FontWeight.bold,
-            color: AppConstants.textPrimary,
+            color: Theme.of(context).textTheme.titleLarge?.color,
           ),
         ),
         const SizedBox(height: AppConstants.spacingS),
@@ -320,7 +321,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
                 '${score.toStringAsFixed(1)} / ${maxScore.toStringAsFixed(0)}',
                 style: AppConstants.bodyText2.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: AppConstants.textSecondary,
+                  color: ThemeUtils.getSecondaryTextColor(context),
                 ),
               ),
             ],
@@ -328,7 +329,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
           const SizedBox(height: 2),
           LinearProgressIndicator(
             value: maxScore > 0 ? (score / maxScore).clamp(0.0, 1.0) : 0.0,
-            backgroundColor: AppConstants.textSecondary.withOpacity(0.2),
+            backgroundColor: ThemeUtils.getVeryMutedTextColor(context, opacity: 0.1),
             valueColor: AlwaysStoppedAnimation<Color>(
               AppConstants.vexIQOrange.withOpacity(0.8),
             ),
@@ -344,7 +345,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
             Text(
               'Ranking: #${data['ranking']} out of ${data['totalTeams']} teams',
               style: AppConstants.caption.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -353,7 +354,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
             Text(
               'Combined Skills Score: ${data['combinedScore']}',
               style: AppConstants.caption.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -362,7 +363,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
             Text(
               'Competitions: ${data['eventCount']}',
               style: AppConstants.caption.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -371,7 +372,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
             Text(
               'Awards: ${data['awardCount']}',
               style: AppConstants.caption.copyWith(
-                color: AppConstants.textSecondary,
+                color: ThemeUtils.getSecondaryTextColor(context),
                 fontStyle: FontStyle.italic,
               ),
             ),
