@@ -67,10 +67,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     
     // Then load other data in parallel, but ensure divisions are loaded first
     if (_divisions.isNotEmpty) {
-      await Future.wait([
-        _loadEventTeams(),
-        _loadEventSkills(),
-        _loadEventMatchesForAllDivisions(),
+    await Future.wait([
+      _loadEventTeams(),
+      _loadEventSkills(),
+      _loadEventMatchesForAllDivisions(),
         _loadEventRankingsForAllDivisions(),
         _loadEventAwards(),
       ]);
@@ -353,6 +353,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           _buildDivisionsCard(),
           const SizedBox(height: AppConstants.spacingM),
           _buildQuickStatsCard(),
+          const SizedBox(height: AppConstants.spacingM),
+          _buildStatIQScoreCard(),
         ],
       ),
     );
@@ -538,17 +540,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               children: [
                 Expanded(
                   child: _buildStatItem(
-                    'Teams',
-                    _isLoadingTeams ? '...' : _teams.length.toString(),
-                    Icons.people,
+                    'World Skill Rank',
+                    _isLoadingSkills ? '...' : _getWorldSkillRank().toString(),
+                    Icons.public,
                     AppConstants.vexIQBlue,
                   ),
                 ),
                 Expanded(
                   child: _buildStatItem(
-                    'Matches',
-                    _isLoadingMatches ? '...' : _getTotalMatchesCount().toString(),
-                    Icons.sports_esports,
+                    'Region Skill Rank',
+                    _isLoadingSkills ? '...' : _getRegionSkillRank().toString(),
+                    Icons.location_on,
                     AppConstants.vexIQGreen,
                   ),
                 ),
@@ -559,17 +561,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               children: [
                 Expanded(
                   child: _buildStatItem(
-                    'Skills',
-                    _isLoadingSkills ? '...' : _skills.length.toString(),
+                    'Awards',
+                    _isLoadingAwards ? '...' : _awards.length.toString(),
                     Icons.emoji_events,
                     AppConstants.vexIQOrange,
                   ),
                 ),
                 Expanded(
                   child: _buildStatItem(
-                    'Divisions',
-                    _isLoadingDivisions ? '...' : _divisions.length.toString(),
-                    Icons.group_work,
+                    'Teams',
+                    _isLoadingTeams ? '...' : _teams.length.toString(),
+                    Icons.people,
                     AppConstants.vexIQRed,
                   ),
                 ),
@@ -610,6 +612,120 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         ],
       ),
     );
+  }
+  
+  Widget _buildStatIQScoreCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingM),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.analytics,
+                  color: AppConstants.vexIQOrange,
+                ),
+                const SizedBox(width: AppConstants.spacingS),
+                Text(
+                  'StatIQ Score',
+                  style: AppConstants.headline6.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+            Container(
+              padding: const EdgeInsets.all(AppConstants.spacingM),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppConstants.vexIQOrange.withOpacity(0.1),
+                    AppConstants.vexIQBlue.withOpacity(0.1),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+                border: Border.all(
+                  color: AppConstants.vexIQOrange.withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Event Performance Score',
+                    style: AppConstants.bodyText1.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.spacingS),
+                  Text(
+                    _calculateEventStatIQScore().toStringAsFixed(1),
+                    style: AppConstants.headline3.copyWith(
+                      color: AppConstants.vexIQOrange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.spacingS),
+                  Text(
+                    'Based on team performance, skills rankings, and competition level',
+                    style: AppConstants.caption.copyWith(
+                      color: AppConstants.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  double _calculateEventStatIQScore() {
+    if (_teams.isEmpty && _skills.isEmpty) return 0.0;
+    
+    double score = 0.0;
+    
+    // Factor 1: Team count (max 20 points)
+    final teamCount = _teams.length;
+    if (teamCount > 0) {
+      score += (teamCount / 50.0 * 20.0).clamp(0.0, 20.0);
+    }
+    
+    // Factor 2: Skills performance (max 30 points)
+    if (_skills.isNotEmpty) {
+      int bestScore = 0;
+      for (final skill in _skills) {
+        final skillScore = (skill['score'] is int) ? skill['score'] as int : int.tryParse(skill['score']?.toString() ?? '0') ?? 0;
+        if (skillScore > bestScore) {
+          bestScore = skillScore;
+        }
+      }
+      score += (bestScore / 200.0 * 30.0).clamp(0.0, 30.0);
+    }
+    
+    // Factor 3: Competition level (max 25 points)
+    final eventName = widget.event.name.toLowerCase();
+    if (eventName.contains('worlds') || eventName.contains('championship')) {
+      score += 25.0;
+    } else if (eventName.contains('signature')) {
+      score += 20.0;
+    } else if (eventName.contains('regional') || eventName.contains('state')) {
+      score += 15.0;
+    } else {
+      score += 10.0;
+    }
+    
+    // Factor 4: Awards (max 25 points)
+    final awardCount = _awards.length;
+    score += (awardCount / 10.0 * 25.0).clamp(0.0, 25.0);
+    
+    return score.clamp(0.0, 100.0);
   }
 
   Widget _buildInfoRow(String label, String value) {
@@ -2204,11 +2320,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     }
 
     if (_awardsError != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
               Icons.error_outline,
               size: 64,
               color: AppConstants.textSecondary,
@@ -2238,25 +2354,25 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           children: [
             Icon(
               Icons.emoji_events_outlined,
-              size: 64,
-              color: AppConstants.textSecondary.withOpacity(0.5),
-            ),
-            const SizedBox(height: AppConstants.spacingM),
-            Text(
+            size: 64,
+            color: AppConstants.textSecondary.withOpacity(0.5),
+          ),
+          const SizedBox(height: AppConstants.spacingM),
+          Text(
               'No Awards Available',
-              style: AppConstants.headline6.copyWith(
-                color: AppConstants.textSecondary,
-              ),
+            style: AppConstants.headline6.copyWith(
+              color: AppConstants.textSecondary,
             ),
-            const SizedBox(height: AppConstants.spacingS),
-            Text(
+          ),
+          const SizedBox(height: AppConstants.spacingS),
+          Text(
               'Awards will appear here once available',
-              style: AppConstants.bodyText2.copyWith(
-                color: AppConstants.textSecondary,
-              ),
+            style: AppConstants.bodyText2.copyWith(
+              color: AppConstants.textSecondary,
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
       );
     }
 
@@ -2484,139 +2600,180 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(AppConstants.spacingM),
-      itemCount: skills.length,
-      itemBuilder: (context, index) {
-        final skill = skills[index];
-        final rank = index + 1;
-        
-        // Safe type conversion for team name
-        final teamData = skill['team'];
-        final teamNumber = (teamData is Map) 
-            ? (teamData['name']?.toString() ?? 'Unknown Team')
-            : 'Unknown Team';
-        
-        // Safe type conversion for score
-        final scoreData = skill['score'];
-        final score = (scoreData is int) 
-            ? scoreData 
-            : (scoreData is String) 
-                ? int.tryParse(scoreData) ?? 0 
-                : 0;
-        
-        // Safe type conversion for attempts
-        final attemptsData = skill['attempts'];
-        final attempts = (attemptsData is int) 
-            ? attemptsData 
-            : (attemptsData is String) 
-                ? int.tryParse(attemptsData) ?? 0 
-                : 0;
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
-          child: Padding(
-            padding: const EdgeInsets.all(AppConstants.spacingM),
-            child: Row(
+    return Column(
               children: [
-                // Rank badge
+        // Header row (RoboScout style)
                 Container(
-                  width: 40,
-                  height: 40,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.spacingM,
+            vertical: AppConstants.spacingS,
+          ),
                   decoration: BoxDecoration(
-                    color: _getRankColor(rank).withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
+            color: AppConstants.vexIQBlue.withOpacity(0.1),
+            border: Border(
+              bottom: BorderSide(
+                color: AppConstants.vexIQBlue.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 50,
                     child: Text(
-                      '$rank',
-                      style: AppConstants.bodyText1.copyWith(
-                        color: _getRankColor(rank),
+                  'Rank',
+                  style: AppConstants.caption.copyWith(
                 fontWeight: FontWeight.bold,
+                    color: AppConstants.vexIQBlue,
               ),
             ),
                   ),
-                ),
-                const SizedBox(width: AppConstants.spacingM),
-                
-                // Team info
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        teamNumber,
-                        style: AppConstants.bodyText1.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Row(
+                flex: 2,
+                child: Text(
+                  'Team',
+                  style: AppConstants.caption.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.vexIQBlue,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 80,
+                child: Text(
+                  'Score',
+                          style: AppConstants.caption.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.vexIQBlue,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SizedBox(
+                width: 60,
+                child: Text(
+                  'Attempts',
+                  style: AppConstants.caption.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.vexIQBlue,
+                  ),
+                  textAlign: TextAlign.center,
+              ),
+            ),
+                    ],
+                  ),
+                ),
+        // Skills list
+        Expanded(
+          child: ListView.builder(
+            itemCount: skills.length,
+            itemBuilder: (context, index) {
+              final skill = skills[index];
+              final rank = index + 1;
+              
+              // Safe type conversion for team name
+              final teamData = skill['team'];
+              final teamNumber = (teamData is Map) 
+                  ? (teamData['name']?.toString() ?? 'Unknown Team')
+                  : 'Unknown Team';
+              
+              // Safe type conversion for score
+              final scoreData = skill['score'];
+              final score = (scoreData is int) 
+                  ? scoreData 
+                  : (scoreData is String) 
+                      ? int.tryParse(scoreData) ?? 0 
+                      : 0;
+              
+              // Safe type conversion for attempts
+              final attemptsData = skill['attempts'];
+              final attempts = (attemptsData is int) 
+                  ? attemptsData 
+                  : (attemptsData is String) 
+                      ? int.tryParse(attemptsData) ?? 0 
+                      : 0;
+
+              return Container(
+                  padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.spacingM,
+                  vertical: AppConstants.spacingS,
+                  ),
+                  decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: AppConstants.borderColor.withOpacity(0.3),
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Rank
+                    SizedBox(
+                      width: 50,
+                      child: Row(
                         children: [
-                          if (attempts > 0)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppConstants.vexIQBlue.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '$attempts tries',
-                                style: AppConstants.caption.copyWith(
-                                  color: AppConstants.vexIQBlue,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                          if (rank <= 3) ...[
+                            Icon(
+                              rank == 1 ? Icons.emoji_events : 
+                              rank == 2 ? Icons.emoji_events : 
+                              Icons.emoji_events,
+                              size: 16,
+                              color: _getRankColor(rank),
                             ),
-                          if (attempts > 0) const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppConstants.vexIQOrange.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Rank $rank',
-                              style: AppConstants.caption.copyWith(
-                                color: AppConstants.vexIQOrange,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(
+                            '$rank',
+                            style: AppConstants.bodyText2.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: _getRankColor(rank),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                
-                // Score
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacingS,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppConstants.vexIQGreen.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
-                  ),
-                  child: Text(
-                    '$score pts',
-                    style: AppConstants.bodyText1.copyWith(
-                      color: AppConstants.vexIQGreen,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                ),
-              ],
-            ),
+                    // Team number
+                    Expanded(
+                      flex: 2,
+                  child: Text(
+                        teamNumber,
+                        style: AppConstants.bodyText2.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    // Score
+                    SizedBox(
+                      width: 80,
+                      child: Text(
+                        '$score',
+                        style: AppConstants.bodyText2.copyWith(
+                      fontWeight: FontWeight.bold,
+                          color: AppConstants.vexIQGreen,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    // Attempts
+                    SizedBox(
+                      width: 60,
+                      child: Text(
+                        '$attempts',
+                        style: AppConstants.bodyText2.copyWith(
+                          color: AppConstants.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
           ),
         );
       },
+          ),
+        ),
+      ],
     );
   }
 
@@ -2666,6 +2823,56 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       total += matches.length;
     }
     return total;
+  }
+  
+  int _getWorldSkillRank() {
+    if (_skills.isEmpty) return 0;
+    
+    // Find the best combined skills score
+    int bestScore = 0;
+    for (final skill in _skills) {
+      final score = (skill['score'] is int) ? skill['score'] as int : int.tryParse(skill['score']?.toString() ?? '0') ?? 0;
+      if (score > bestScore) {
+        bestScore = score;
+      }
+    }
+    
+    // Estimate world rank based on score (this is a simplified calculation)
+    // In a real implementation, this would query the global skills database
+    if (bestScore >= 200) return 1;
+    if (bestScore >= 180) return 5;
+    if (bestScore >= 160) return 15;
+    if (bestScore >= 140) return 50;
+    if (bestScore >= 120) return 100;
+    if (bestScore >= 100) return 250;
+    if (bestScore >= 80) return 500;
+    if (bestScore >= 60) return 1000;
+    return 2000;
+  }
+  
+  int _getRegionSkillRank() {
+    if (_skills.isEmpty) return 0;
+    
+    // Find the best combined skills score
+    int bestScore = 0;
+    for (final skill in _skills) {
+      final score = (skill['score'] is int) ? skill['score'] as int : int.tryParse(skill['score']?.toString() ?? '0') ?? 0;
+      if (score > bestScore) {
+        bestScore = score;
+      }
+    }
+    
+    // Estimate region rank based on score (this is a simplified calculation)
+    // In a real implementation, this would query the regional skills database
+    if (bestScore >= 200) return 1;
+    if (bestScore >= 180) return 3;
+    if (bestScore >= 160) return 8;
+    if (bestScore >= 140) return 20;
+    if (bestScore >= 120) return 50;
+    if (bestScore >= 100) return 100;
+    if (bestScore >= 80) return 200;
+    if (bestScore >= 60) return 400;
+    return 800;
   }
 
   Widget _buildMatchCard(dynamic match) {

@@ -27,6 +27,12 @@ class _EventsScreenState extends State<EventsScreen> {
   // Season selection
   String _selectedSeason = 'Mix & Match (2025-2026)';
   int _selectedSeasonId = 196;
+  
+  // Filter states
+  List<String> _selectedRegions = [];
+  String _selectedTimeFrame = 'All Time';
+  String _selectedEventType = 'All Types';
+  bool _sortEarliestFirst = true;
 
   @override
   void initState() {
@@ -148,86 +154,133 @@ class _EventsScreenState extends State<EventsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Events',
-            style: AppConstants.headline4.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppConstants.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingS),
-          Text(
-            'Find VEX IQ competitions and events',
-            style: AppConstants.bodyText2.copyWith(
-              color: AppConstants.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingM),
           _buildSeasonSelector(),
           const SizedBox(height: AppConstants.spacingM),
-          Row(
-            children: [
-              Expanded(
-      child: TextField(
-        controller: _searchController,
-                  focusNode: _searchFocusNode,
-        decoration: InputDecoration(
-                    hintText: 'Search events by name...',
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: AppConstants.vexIQOrange,
-                    ),
-                    suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _searchController.clear();
-                              _loadRecentEvents();
-                  },
-                )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-                      borderSide: const BorderSide(color: AppConstants.borderColor),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-                      borderSide: BorderSide(color: AppConstants.vexIQOrange, width: 2),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() {}); // Update UI for clear button
-                  },
-                  onSubmitted: _searchEvents,
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacingS),
-              ElevatedButton(
-                onPressed: _isLoading 
-                    ? null 
-                    : () => _searchEvents(_searchController.text),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppConstants.vexIQOrange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacingL,
-                    vertical: AppConstants.spacingM,
-                  ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Search'),
-              ),
-            ],
-          ),
+          _buildSearchBar(),
+          const SizedBox(height: AppConstants.spacingM),
+          _buildFilterButtons(),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildSearchBar() {
+    return TextField(
+      controller: _searchController,
+      focusNode: _searchFocusNode,
+      decoration: InputDecoration(
+        hintText: 'Search by name & location',
+        prefixIcon: _searchController.text.isEmpty 
+            ? null 
+            : Icon(
+                Icons.search,
+                color: AppConstants.vexIQOrange,
+              ),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  _searchController.clear();
+                  _loadRecentEvents();
+                },
+              )
+            : null,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+          borderSide: const BorderSide(color: AppConstants.borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+          borderSide: BorderSide(color: AppConstants.vexIQOrange, width: 2),
+        ),
+      ),
+      onChanged: (value) {
+        setState(() {}); // Update UI for clear button
+        if (value.trim().isNotEmpty) {
+          _searchEvents(value);
+        } else {
+          _loadRecentEvents();
+        }
+      },
+      onSubmitted: _searchEvents,
+    );
+  }
+  
+  Widget _buildFilterButtons() {
+    return Row(
+      children: [
+        // Region filter
+        Expanded(
+          child: _buildFilterButton(
+            icon: Icons.public,
+            label: _selectedRegions.isEmpty ? 'Region' : '${_selectedRegions.length} selected',
+            onTap: _showRegionFilter,
+          ),
+        ),
+        const SizedBox(width: AppConstants.spacingS),
+        // Time frame filter
+        Expanded(
+          child: _buildFilterButton(
+            icon: Icons.calendar_today,
+            label: _selectedTimeFrame,
+            onTap: _showTimeFrameFilter,
+          ),
+        ),
+        const SizedBox(width: AppConstants.spacingS),
+        // Event type filter
+        Expanded(
+          child: _buildFilterButton(
+            icon: Icons.category,
+            label: _selectedEventType,
+            onTap: _showEventTypeFilter,
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildFilterButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spacingS,
+          vertical: AppConstants.spacingS,
+        ),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppConstants.borderColor),
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: AppConstants.vexIQOrange,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                label,
+                style: AppConstants.caption.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 16,
+              color: AppConstants.textSecondary,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -525,124 +578,7 @@ class _EventsScreenState extends State<EventsScreen> {
             final event = _events[index];
             return Card(
               margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: _getEventTypeColor(event.name),
-                  child: Icon(
-                    _getEventTypeIcon(event.name),
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                title: Text(
-                  event.name,
-                  style: AppConstants.bodyText1.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_getEventLocation(event).isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on,
-                            size: 16,
-                            color: AppConstants.textSecondary,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              _getEventLocation(event),
-                              style: AppConstants.caption.copyWith(
-                                color: AppConstants.textSecondary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (event.start != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today,
-                            size: 16,
-                            color: AppConstants.textSecondary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatEventDate(event.start!),
-                            style: AppConstants.caption.copyWith(
-                              color: AppConstants.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppConstants.vexIQOrange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'VEX IQ',
-                        style: AppConstants.caption.copyWith(
-                          color: AppConstants.vexIQOrange,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Consumer<UserSettings>(
-                      builder: (context, settings, child) {
-                        final isFavorite = settings.isFavoriteEvent(event.sku);
-                        return IconButton(
-                          icon: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            color: isFavorite ? Colors.red : AppConstants.textSecondary,
-                          ),
-                          onPressed: () async {
-                            if (isFavorite) {
-                              await settings.removeFavoriteEvent(event.sku);
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${event.name} removed from favorites')),
-                                );
-                              }
-                            } else {
-                              await settings.addFavoriteEvent(event.sku);
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${event.name} added to favorites')),
-                                );
-                              }
-                            }
-                          },
-                        );
-                      },
-                    ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: AppConstants.textSecondary,
-                    ),
-                  ],
-                ),
+              child: InkWell(
                 onTap: () {
                   Navigator.push(
                     context,
@@ -651,12 +587,313 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   );
                 },
+                borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.spacingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Event name and location spanning full width
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  event.name,
+                                  style: AppConstants.bodyText1.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (_getEventLocation(event).isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _getEventLocation(event),
+                                    style: AppConstants.caption.copyWith(
+                                      color: AppConstants.textSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          // Event type badge (MS, ES, or Blended)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getEventTypeColor(event.name).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _getEventTypeLabel(event.name),
+                              style: AppConstants.caption.copyWith(
+                                color: _getEventTypeColor(event.name),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppConstants.spacingS),
+                      // Bottom row with favorite button and arrow
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Event type icon
+                          Row(
+                            children: [
+                              Icon(
+                                _getEventTypeIcon(event.name),
+                                size: 16,
+                                color: _getEventTypeColor(event.name),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _getEventTypeName(event.name),
+                                style: AppConstants.caption.copyWith(
+                                  color: AppConstants.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          // Favorite button and arrow
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Consumer<UserSettings>(
+                                builder: (context, settings, child) {
+                                  final isFavorite = settings.isFavoriteEvent(event.sku);
+                                  return IconButton(
+                                    icon: Icon(
+                                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                                      color: isFavorite ? Colors.red : AppConstants.textSecondary,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      if (isFavorite) {
+                                        await settings.removeFavoriteEvent(event.sku);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('${event.name} removed from favorites')),
+                                          );
+                                        }
+                                      } else {
+                                        await settings.addFavoriteEvent(event.sku);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('${event.name} added to favorites')),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
+                              Icon(
+                                Icons.chevron_right,
+                                color: AppConstants.textSecondary,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             );
           },
         ),
       ),
     );
+  }
+
+  void _showRegionFilter() {
+    final regions = [
+      'North America',
+      'Europe',
+      'Asia',
+      'South America',
+      'Africa',
+      'Oceania',
+    ];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Regions'),
+        content: StatefulBuilder(
+          builder: (context, setState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: regions.map((region) {
+                final isSelected = _selectedRegions.contains(region);
+                return CheckboxListTile(
+                  title: Text(region),
+                  value: isSelected,
+                  onChanged: (value) {
+                    setState(() {
+                      if (value == true) {
+                        _selectedRegions.add(region);
+                      } else {
+                        _selectedRegions.remove(region);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {});
+              Navigator.pop(context);
+              _applyFilters();
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showTimeFrameFilter() {
+    final timeFrames = [
+      'All Time',
+      'This Week',
+      'This Month',
+      'Next Month',
+      'This Season',
+    ];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Time Frame'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...timeFrames.map((timeFrame) {
+              return RadioListTile<String>(
+                title: Text(timeFrame),
+                value: timeFrame,
+                groupValue: _selectedTimeFrame,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedTimeFrame = value!;
+                  });
+                  Navigator.pop(context);
+                  _applyFilters();
+                },
+              );
+            }),
+            const Divider(),
+            Row(
+              children: [
+                const Text('Sort: '),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Radio<bool>(
+                        value: true,
+                        groupValue: _sortEarliestFirst,
+                        onChanged: (value) {
+                          setState(() {
+                            _sortEarliestFirst = value!;
+                          });
+                        },
+                      ),
+                      const Text('Earliest'),
+                      Radio<bool>(
+                        value: false,
+                        groupValue: _sortEarliestFirst,
+                        onChanged: (value) {
+                          setState(() {
+                            _sortEarliestFirst = value!;
+                          });
+                        },
+                      ),
+                      const Text('Latest'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showEventTypeFilter() {
+    final eventTypes = [
+      'All Types',
+      'Local',
+      'School-Only',
+      'Regional/States',
+      'Signature',
+      'Important (US Open, Worlds)',
+    ];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Event Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: eventTypes.map((eventType) {
+            return RadioListTile<String>(
+              title: Text(eventType),
+              value: eventType,
+              groupValue: _selectedEventType,
+              onChanged: (value) {
+                setState(() {
+                  _selectedEventType = value!;
+                });
+                Navigator.pop(context);
+                _applyFilters();
+              },
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _applyFilters() {
+    // Apply filters to the current event list
+    // This would filter the _events list based on selected criteria
+    setState(() {
+      // Filter logic would go here
+    });
   }
 
   Color _getEventTypeColor(String eventName) {
@@ -678,6 +915,32 @@ class _EventsScreenState extends State<EventsScreen> {
       return Icons.star;
     } else {
         return Icons.event;
+    }
+  }
+  
+  String _getEventTypeLabel(String eventName) {
+    final name = eventName.toLowerCase();
+    if (name.contains('middle school') || name.contains('ms')) {
+      return 'MS';
+    } else if (name.contains('elementary') || name.contains('es')) {
+      return 'ES';
+    } else {
+      return 'Blended';
+    }
+  }
+  
+  String _getEventTypeName(String eventName) {
+    final name = eventName.toLowerCase();
+    if (name.contains('championship') || name.contains('worlds')) {
+      return 'Championship';
+    } else if (name.contains('signature')) {
+      return 'Signature';
+    } else if (name.contains('regional') || name.contains('state')) {
+      return 'Regional';
+    } else if (name.contains('school')) {
+      return 'School-Only';
+    } else {
+      return 'Local';
     }
   }
 
