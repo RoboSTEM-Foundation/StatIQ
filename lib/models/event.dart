@@ -10,6 +10,7 @@ class Event {
   final String country;
   final int? levelClassId;
   final String levelClassName;
+  final String level; // API event level (e.g., Signature, World, Other)
 
   Event({
     required this.id,
@@ -23,6 +24,7 @@ class Event {
     required this.country,
     this.levelClassId,
     required this.levelClassName,
+    this.level = '',
   });
 
   factory Event.fromJson(Map<String, dynamic> json) {
@@ -42,6 +44,7 @@ class Event {
         country: locationData['country'] as String? ?? '',
         levelClassId: json['level_class_id'] as int?,
         levelClassName: json['level_class'] as String? ?? '',
+        level: json['level'] as String? ?? '',
       );
     } catch (e) {
       print('Error parsing Event JSON: $e');
@@ -82,6 +85,7 @@ class Event {
       'country': country,
       'level_class_id': levelClassId,
       'level_class': levelClassName,
+      'level': level,
     };
   }
 

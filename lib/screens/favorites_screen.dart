@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
+import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
@@ -214,11 +215,20 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Widget _buildFavoriteTeamCard(Team team) {
+    final teamTier = SpecialTeamsService.instance.getTeamTier(team.number);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+        side: tierColor != null ? BorderSide(color: tierColor, width: 2) : BorderSide.none,
+      ),
+      color: tierColor != null ? tierColor.withOpacity(0.1) : null,
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _getDivisionColor(team.grade),
+          backgroundColor: tierColor ?? _getDivisionColor(team.grade),
           child: Text(
             team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
             style: const TextStyle(
@@ -227,11 +237,47 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             ),
           ),
         ),
-        title: Text(
-          team.name.isNotEmpty ? team.name : 'Team ${team.number}',
-          style: AppConstants.headline6.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                team.name.isNotEmpty ? team.name : 'Team ${team.number}',
+                style: AppConstants.headline6.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (teamTier != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: tierColor!.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+                  border: Border.all(color: tierColor, width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.stars,
+                      size: 10,
+                      color: tierColor,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      SpecialTeamsService.instance.getTierDisplayName(teamTier),
+                      style: AppConstants.caption.copyWith(
+                        color: tierColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

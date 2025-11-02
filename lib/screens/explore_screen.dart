@@ -6,6 +6,8 @@ import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
@@ -20,13 +22,19 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   bool _isLoadingSkills = true;
   List<dynamic> _skillsRankings = [];
+  String _skillsGradeLevel = 'Middle School';
   bool _isLoadingEvents = true;
   List<Event> _signatureEvents = [];
 
   @override
   void initState() {
     super.initState();
-    _loadWorldSkillsRankings();
+    // Initialize grade level from settings after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settings = Provider.of<UserSettings>(context, listen: false);
+      _skillsGradeLevel = settings.skillsGradeLevel;
+      _loadWorldSkillsRankings();
+    });
     _loadSignatureEvents();
   }
 
@@ -36,7 +44,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     });
 
     try {
-      final rankings = await RobotEventsAPI.getWorldSkillsRankings();
+      final rankings = await RobotEventsAPI.getWorldSkillsRankings(
+        gradeLevel: _skillsGradeLevel,
+      );
       setState(() {
         _skillsRankings = rankings;
       });
@@ -49,16 +59,41 @@ class _ExploreScreenState extends State<ExploreScreen> {
     }
   }
 
+  Widget _buildGradeToggle(UserSettings settings) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ChoiceChip(
+          label: const Text('ES'),
+          selected: settings.skillsGradeLevel == 'Elementary School',
+          onSelected: (v) async {
+            await settings.setSkillsGradeLevel('Elementary School');
+            setState(() => _skillsGradeLevel = settings.skillsGradeLevel);
+            _loadWorldSkillsRankings();
+          },
+        ),
+        const SizedBox(width: 8),
+        ChoiceChip(
+          label: const Text('MS'),
+          selected: settings.skillsGradeLevel == 'Middle School',
+          onSelected: (v) async {
+            await settings.setSkillsGradeLevel('Middle School');
+            setState(() => _skillsGradeLevel = settings.skillsGradeLevel);
+            _loadWorldSkillsRankings();
+          },
+        ),
+      ],
+    );
+  }
+
   Future<void> _loadSignatureEvents() async {
     setState(() {
       _isLoadingEvents = true;
     });
 
     try {
-      // Use proper API filtering with level[]=Signature parameter
-      final events = await RobotEventsAPI.searchEvents(
-        levels: ['Signature'],
-      );
+      // Search for signature events by name (more reliable than level filtering)
+      final events = await RobotEventsAPI.searchEvents(query: 'Signature Event');
       
       // Filter for upcoming events and limit to 10
       final now = DateTime.now();
@@ -273,7 +308,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
     } else if (difference > 0 && difference <= 7) {
       return 'In $difference days';
     } else {
-      return '${date.day}/${date.month}/${date.year}';
+      final mm = date.month.toString().padLeft(2, '0');
+      final dd = date.day.toString().padLeft(2, '0');
+      final yy = (date.year % 100).toString().padLeft(2, '0');
+      return '$mm/$dd/$yy';
     }
   }
 
@@ -291,11 +329,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-              'Top 10 World Skills',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Top 10 World Skills',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                Consumer<UserSettings>(
+                  builder: (context, settings, _) => _buildGradeToggle(settings),
+                ),
+              ],
             ),
           ),
           ListView.builder(

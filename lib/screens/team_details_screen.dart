@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
+import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/widgets/vex_iq_score_card.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 // import 'package:stat_iq/constants/api_config.dart';
@@ -243,6 +244,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    final teamTier = SpecialTeamsService.instance.getTeamTier((_currentTeam ?? widget.team).number);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -282,8 +287,8 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppConstants.vexIQBlue,
-          labelColor: AppConstants.vexIQBlue,
+          indicatorColor: tierColor ?? AppConstants.vexIQBlue,
+          labelColor: tierColor ?? AppConstants.vexIQBlue,
           unselectedLabelColor: ThemeUtils.getSecondaryTextColor(context, opacity: 0.6),
           tabs: [
             const Tab(text: 'Overview'),
@@ -306,6 +311,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Widget _buildMatchesTab() {
+    final teamTier = SpecialTeamsService.instance.getTeamTier((_currentTeam ?? widget.team).number);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    
     if (_isLoadingCompetitionData) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -386,10 +395,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                   bottom: AppConstants.spacingS,
                 ),
                 decoration: BoxDecoration(
-                  color: AppConstants.vexIQBlue.withOpacity(0.1),
+                  color: (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: AppConstants.vexIQBlue.withOpacity(0.3),
+                    color: (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.3),
                     width: 1,
                   ),
                 ),
@@ -398,7 +407,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                     Icon(
                       Icons.event,
                       size: 16,
-                      color: AppConstants.vexIQBlue,
+                      color: tierColor ?? AppConstants.vexIQBlue,
                     ),
                     const SizedBox(width: AppConstants.spacingXS),
                     Expanded(
@@ -406,7 +415,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                         eventName,
                         style: AppConstants.bodyText2.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: AppConstants.vexIQBlue,
+                          color: tierColor ?? AppConstants.vexIQBlue,
                         ),
                       ),
                     ),
@@ -416,13 +425,13 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppConstants.vexIQBlue.withOpacity(0.2),
+                        color: (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         '${eventMatches.length} ${eventMatches.length == 1 ? 'match' : 'matches'}',
                         style: AppConstants.caption.copyWith(
-                          color: AppConstants.vexIQBlue,
+                          color: tierColor ?? AppConstants.vexIQBlue,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -465,11 +474,15 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Widget _buildTeamPill(String teamNumber, bool isCurrentTeam) {
+    final teamTier = SpecialTeamsService.instance.getTeamTier(teamNumber);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isCurrentTeam 
-            ? AppConstants.vexIQBlue 
+            ? (tierColor ?? AppConstants.vexIQBlue)
             : Colors.grey[300],
         borderRadius: BorderRadius.circular(16),
       ),
@@ -485,6 +498,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Widget _buildMatchCard(Match match) {
+    final teamTier = SpecialTeamsService.instance.getTeamTier((_currentTeam ?? widget.team).number);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    
     // For VEX IQ, matches are skills challenges, not head-to-head competitions
     // Find which alliance the team is in and get all teams in the match
     String teamAlliance = '';
@@ -502,73 +519,133 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
 
     final matchType = _getMatchTypeDisplay(match);
     final formattedTime = match.scheduled != null ? _formatCompactTime(match.scheduled!) : '';
+    final eventName = _getEventNameForMatch(match);
+    
+    // Find the event for this match
+    Event? eventForMatch;
+    if (widget.eventId != null) {
+      eventForMatch = _teamEvents.firstWhere(
+        (e) => e.id == widget.eventId,
+        orElse: () => _teamEvents.first,
+      );
+    } else if (match.scheduled != null) {
+      // Find closest event by date
+      Event? closestEvent;
+      int minDaysDiff = 365;
+      for (final event in _teamEvents) {
+        if (event.start != null) {
+          final daysDiff = (match.scheduled!.difference(event.start!).inDays).abs();
+          if (daysDiff < minDaysDiff) {
+            minDaysDiff = daysDiff;
+            closestEvent = event;
+          }
+        }
+      }
+      eventForMatch = (closestEvent != null && minDaysDiff <= 7) ? closestEvent : _teamEvents.isNotEmpty ? _teamEvents.first : null;
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
       color: Theme.of(context).brightness == Brightness.dark 
           ? Colors.grey[800]!.withOpacity(0.3)
-          : null,
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacingM),
-        child: Row(
-          children: [
-            // Left side: Match type and teams
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Match type and time
-                  Row(
-                    children: [
-                      Text(
-                        matchType,
-                        style: AppConstants.bodyText1.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (formattedTime.isNotEmpty)
+          : (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.05),
+      child: InkWell(
+        onTap: eventForMatch != null ? () {
+          // Navigate to event details screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventDetailsScreen(event: eventForMatch!),
+            ),
+          );
+        } : null,
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          child: Row(
+            children: [
+              // Left side: Match type and teams
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Match type and date/time
+                    Row(
+                      children: [
                         Text(
-                          formattedTime,
-                          style: AppConstants.caption.copyWith(
-                            color: ThemeUtils.getSecondaryTextColor(context),
-                            fontSize: 12,
+                          matchType,
+                          style: AppConstants.bodyText1.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Team pills in row
-                  if (allTeamsInMatch.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      children: allTeamsInMatch.map((team) {
-                        final isCurrentTeam = team.id == _currentTeam?.id;
-                        return _buildTeamPill(team.number, isCurrentTeam);
-                      }).toList(),
+                        const Spacer(),
+                        if (match.scheduled != null)
+                          Text(
+                            '${match.scheduled!.month.toString().padLeft(2, '0')}/${match.scheduled!.day.toString().padLeft(2, '0')}/${(match.scheduled!.year % 100).toString().padLeft(2, '0')} · $formattedTime',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
                     ),
+                    const SizedBox(height: 8),
+                    // Team pills in row
+                    if (allTeamsInMatch.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        children: allTeamsInMatch.map((team) {
+                          final isCurrentTeam = team.id == _currentTeam?.id;
+                          return _buildTeamPill(team.number, isCurrentTeam);
+                        }).toList(),
+                      ),
+                    if (eventName.isNotEmpty && eventName != 'Unknown Event') ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.event,
+                            size: 14,
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              eventName,
+                              style: AppConstants.caption.copyWith(
+                                color: tierColor ?? AppConstants.vexIQBlue,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Score and arrow
+              Column(
+                children: [
+                  Text(
+                    teamScore.toString(),
+                    style: AppConstants.headline4.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24,
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: ThemeUtils.getSecondaryTextColor(context),
+                  ),
                 ],
               ),
-            ),
-            // Score and arrow
-            Column(
-              children: [
-                Text(
-                  teamScore.toString(),
-                  style: AppConstants.headline4.copyWith(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24,
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: ThemeUtils.getSecondaryTextColor(context),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -657,11 +734,65 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Widget _buildOverviewTab() {
+    final teamTier = SpecialTeamsService.instance.getTeamTier((_currentTeam ?? widget.team).number);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    final tierDescription = teamTier != null ? SpecialTeamsService.instance.getTierDescription(teamTier) : null;
+    final tierDisplayName = teamTier != null ? SpecialTeamsService.instance.getTierDisplayName(teamTier) : null;
+    
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppConstants.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Special Team Banner (if applicable)
+          if (teamTier != null && tierColor != null) ...[
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+                side: BorderSide(color: tierColor, width: 2),
+              ),
+              color: tierColor.withOpacity(0.15),
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.spacingM),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.stars,
+                      color: tierColor,
+                      size: 28,
+                    ),
+                    const SizedBox(width: AppConstants.spacingM),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tierDisplayName ?? teamTier,
+                            style: AppConstants.headline6.copyWith(
+                              color: tierColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (tierDescription != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              tierDescription,
+                              style: AppConstants.bodyText2.copyWith(
+                                color: ThemeUtils.getSecondaryTextColor(context),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacingM),
+          ],
           // Team Info Card
           _buildTeamInfoCard(),
           const SizedBox(height: AppConstants.spacingM),
@@ -686,6 +817,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Widget _buildTeamInfoCard() {
+    final teamTier = SpecialTeamsService.instance.getTeamTier((_currentTeam ?? widget.team).number);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    
     return Card(
       elevation: AppConstants.elevationS,
       shape: RoundedRectangleBorder(
@@ -701,12 +836,12 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                 Container(
                   padding: const EdgeInsets.all(AppConstants.spacingS),
                   decoration: BoxDecoration(
-                    color: AppConstants.vexIQBlue.withOpacity(0.1),
+                    color: (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
                   ),
                   child: Icon(
                     Icons.groups,
-                    color: AppConstants.vexIQBlue,
+                    color: tierColor ?? AppConstants.vexIQBlue,
                     size: 20,
                   ),
                 ),
@@ -785,6 +920,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Widget _buildQuickStats() {
+    final teamTier = SpecialTeamsService.instance.getTeamTier((_currentTeam ?? widget.team).number);
+    final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+    final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+    
     return Card(
       elevation: AppConstants.elevationS,
       shape: RoundedRectangleBorder(
@@ -809,7 +948,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                     'Competitions',
                     _teamEvents.length.toString(),
                     Icons.event,
-                    AppConstants.vexIQBlue,
+                    tierColor ?? AppConstants.vexIQBlue,
                   ),
                 ),
                 Expanded(

@@ -1,0 +1,20 @@
+{
+  "cappedPinsAlliance": {
+    "description": "This team has been voted in and is a member of the Capped Pins Alliance, meaning they are an extremely good high-tier team.",
+    "color": "#8B0000",
+    "accentColor": "#DC143C",
+    "teams": []
+  },
+  "robostem": {
+    "description": "This team is part of the RoboStem organization.",
+    "color": "#0066CC",
+    "accentColor": "#007BFF",
+    "teams": []
+  },
+  "highlighted": {
+    "description": "This team has been highlighted by the server for their great contributions and skills in VEX IQ.",
+    "color": "#FFD700",
+    "accentColor": "#FFA500",
+    "teams": []
+  }
+}
