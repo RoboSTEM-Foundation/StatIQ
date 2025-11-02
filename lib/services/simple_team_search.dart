@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stat_iq/services/robotevents_api.dart';
+import 'package:stat_iq/constants/api_config.dart';
 
 class SimpleTeamSearch {
   static const String _teamDataKey = 'cached_team_list';
@@ -98,7 +100,33 @@ class SimpleTeamSearch {
     return sampleTeams.take(count).toList();
   }
   
-  /// Fast team number search
+  /// Search teams using API (async version for when toggle is off)
+  static Future<List<Map<String, dynamic>>> searchByAPI(String query, {int limit = 50}) async {
+    if (query.trim().isEmpty) return [];
+    
+    try {
+      // Use RobotEvents API to search for teams
+      final teams = await RobotEventsAPI.searchTeams(teamNumber: query.trim());
+      
+      // Convert to Map format
+      return teams.map((team) => {
+        'id': team.id,
+        'number': team.number,
+        'name': team.name,
+        'robotName': team.robotName,
+        'organization': team.organization,
+        'city': team.city,
+        'region': team.region,
+        'country': team.country,
+        'grade': team.grade,
+      }).take(limit).toList();
+    } catch (e) {
+      print('❌ Error searching teams via API: $e');
+      return [];
+    }
+  }
+  
+  /// Fast team number search (sync version for cached data)
   static List<Map<String, dynamic>> searchByNumber(String query, {int limit = 50}) {
     if (!_isInitialized || _allTeams.isEmpty) return [];
     if (query.trim().isEmpty) return getFirstTeams(20);
@@ -140,7 +168,7 @@ class SimpleTeamSearch {
     return results;
   }
   
-  /// Search by name or organization
+  /// Search by name or organization (sync version for cached data)
   static List<Map<String, dynamic>> searchByName(String query, {int limit = 50}) {
     if (!_isInitialized || _allTeams.isEmpty) return [];
     if (query.trim().isEmpty) return getFirstTeams(20);

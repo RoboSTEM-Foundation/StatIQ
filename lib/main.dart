@@ -5,10 +5,12 @@ import 'package:stat_iq/screens/home_screen.dart';
 import 'package:stat_iq/screens/teams_screen.dart';
 import 'package:stat_iq/screens/events_screen.dart';
 import 'package:stat_iq/screens/explore_screen.dart';
+import 'package:stat_iq/screens/team_select_screen.dart';
 
 import 'package:stat_iq/screens/settings_screen.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/services/user_settings.dart';
+import 'package:stat_iq/services/special_teams_service.dart';
 // import 'package:stat_iq/services/notification_service.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
@@ -42,6 +44,9 @@ Future<void> _initializeServices() async {
     } else {
       print('⚠️  API initialization failed');
     }
+    
+    // Initialize special teams service
+    await SpecialTeamsService.instance.load();
     
     // Initialize notification service
     // await NotificationService().initialize();
@@ -93,6 +98,7 @@ class TheCappedPinsApp extends StatelessWidget {
                     '/teams': (context) => const MainNavigation(initialIndex: 1),
                     '/events': (context) => const MainNavigation(initialIndex: 2),
                     '/settings': (context) => const MainNavigation(initialIndex: 3),
+                    '/team-select': (context) => const TeamSelectScreen(),
                   },
                 );
               },

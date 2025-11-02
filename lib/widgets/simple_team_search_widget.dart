@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/services/team_sync_service.dart';
 import 'package:stat_iq/services/simple_team_search.dart';
+import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:provider/provider.dart';
@@ -13,12 +14,14 @@ class SimpleTeamSearchWidget extends StatefulWidget {
   final String? hintText;
   final bool showSyncStatus;
   final Function(Team)? onTeamSelected;
+  final bool useAPI; // New parameter to use API instead of cached data
 
   const SimpleTeamSearchWidget({
     super.key,
     this.hintText,
     this.showSyncStatus = false,
     this.onTeamSelected,
+    this.useAPI = false,
   });
 
   @override
@@ -54,21 +57,30 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
     });
 
     try {
-      // Initialize simple search
-      await SimpleTeamSearch.initialize();
-      
-      if (mounted) {
-        final hasData = SimpleTeamSearch.isReady();
-        final teamCount = SimpleTeamSearch.getTeamCount();
-        print('📱 Search initialized: hasData=$hasData, teamCount=$teamCount');
-        
+      if (widget.useAPI) {
+        // When using API, we don't need to initialize cached data
+        print('📱 Using API search mode');
         setState(() {
-          _hasData = hasData;
+          _hasData = true;
           _isLoading = false;
         });
+      } else {
+        // Initialize simple search with cached data
+        await SimpleTeamSearch.initialize();
         
-        // Show first 20 teams by default
-        _performSearch('');
+        if (mounted) {
+          final hasData = SimpleTeamSearch.isReady();
+          final teamCount = SimpleTeamSearch.getTeamCount();
+          print('📱 Search initialized: hasData=$hasData, teamCount=$teamCount');
+          
+          setState(() {
+            _hasData = hasData;
+            _isLoading = false;
+          });
+          
+          // Show first 20 teams by default
+          _performSearch('');
+        }
       }
     } catch (e) {
       print('❌ Error loading search data: $e');
@@ -97,20 +109,53 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
       _isSearching = true;
     });
 
-    // Use simple search
-    if (query.trim().isEmpty) {
-      // Show first 20 teams when no search
-      _searchResults = SimpleTeamSearch.getFirstTeams(20);
-      print('📱 Showing first 20 teams: ${_searchResults.length} results');
+    if (widget.useAPI) {
+      // Use API search (async)
+      _performAPISearch(query);
     } else {
-      // Search by team number (fastest)
-      _searchResults = SimpleTeamSearch.searchByNumber(query, limit: 50);
-      print('🔍 Search for "$query": ${_searchResults.length} results');
+      // Use cached simple search
+      if (query.trim().isEmpty) {
+        // Show first 20 teams when no search
+        _searchResults = SimpleTeamSearch.getFirstTeams(20);
+        print('📱 Showing first 20 teams: ${_searchResults.length} results');
+      } else {
+        // Search by team number (fastest)
+        _searchResults = SimpleTeamSearch.searchByNumber(query, limit: 50);
+        print('🔍 Search for "$query": ${_searchResults.length} results');
+      }
+      
+      setState(() {
+        _isSearching = false;
+      });
     }
-    
-    setState(() {
-      _isSearching = false;
-    });
+  }
+
+  Future<void> _performAPISearch(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    try {
+      final results = await SimpleTeamSearch.searchByAPI(query, limit: 50);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      print('❌ API search error: $e');
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _isSearching = false;
+        });
+      }
+    }
   }
 
   Future<void> _refreshTeamList() async {
@@ -339,6 +384,10 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
           registered: true,
         );
 
+        final teamTier = SpecialTeamsService.instance.getTeamTier(team.number);
+        final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+        final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
+
         return Card(
           margin: const EdgeInsets.symmetric(
             horizontal: AppConstants.spacingM,
@@ -347,7 +396,9 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
           elevation: AppConstants.elevationS,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+            side: tierColor != null ? BorderSide(color: tierColor, width: 2) : BorderSide.none,
           ),
+          color: tierColor != null ? tierColor.withOpacity(0.1) : null,
           child: InkWell(
             borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
             onTap: () => _onTeamTap(teamData),
@@ -356,7 +407,7 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: AppConstants.vexIQOrange,
+                    backgroundColor: tierColor ?? AppConstants.vexIQOrange,
                     radius: 20,
                     child: Text(
                       team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
@@ -372,11 +423,45 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          team.number,
-                          style: AppConstants.headline6.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              team.number,
+                              style: AppConstants.headline6.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (teamTier != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: tierColor!.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+                                  border: Border.all(color: tierColor, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.stars,
+                                      size: 10,
+                                      color: tierColor,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      SpecialTeamsService.instance.getTierDisplayName(teamTier),
+                                      style: AppConstants.caption.copyWith(
+                                        color: tierColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         if (team.name.isNotEmpty)
                           Text(

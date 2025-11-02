@@ -5,6 +5,7 @@ import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
+import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
@@ -50,41 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showMyTeamDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        final mediaQuery = MediaQuery.of(context);
-        final keyboardHeight = mediaQuery.viewInsets.bottom;
-        final availableHeight = mediaQuery.size.height - keyboardHeight;
-        
-        return AlertDialog(
-          title: Row(
-            children: [
-              const Expanded(child: Text('Select Your Team')),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Skip'),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: availableHeight * 0.85,
-            child: OptimizedTeamSearchWidget(
-              isSelectionMode: true,
-              onTeamSelected: (team) {
-                final userSettings = Provider.of<UserSettings>(context, listen: false);
-                userSettings.setMyTeam(team.number);
-                // Auto-add to favorites
-                userSettings.addFavoriteTeam(team.number);
-                Navigator.of(context).pop();
-              },
-            ),
-          ),
-          actions: const [], // Remove actions since Skip is now in title
-        );
-      },
-    );
+    Navigator.pushNamed(context, '/team-select');
   }
 
   Future<void> _loadFavoriteTeams() async {
@@ -387,18 +354,23 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<UserSettings>(
       builder: (context, userSettings, child) {
         final isMyTeam = userSettings.myTeam == team.number;
+        final teamTier = SpecialTeamsService.instance.getTeamTier(team.number);
+        final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+        final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
         
         return Card(
           margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
           elevation: AppConstants.elevationS,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-            side: isMyTeam ? BorderSide(
-              color: AppConstants.vexIQBlue,
+            side: (isMyTeam || tierColor != null) ? BorderSide(
+              color: tierColor ?? AppConstants.vexIQBlue,
               width: 2,
             ) : BorderSide.none,
           ),
-          color: isMyTeam ? AppConstants.vexIQBlue.withOpacity(0.1) : null,
+          color: (isMyTeam || tierColor != null) 
+              ? (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1) 
+              : null,
           child: InkWell(
             borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
             onTap: () => _showTeamDetails(team),
@@ -410,7 +382,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: isMyTeam ? AppConstants.vexIQBlue : AppConstants.vexIQOrange,
+                        backgroundColor: (isMyTeam || tierColor != null) 
+                            ? (tierColor ?? AppConstants.vexIQBlue) 
+                            : AppConstants.vexIQOrange,
                         radius: 24,
                         child: Text(
                           team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
@@ -425,11 +399,45 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          team.number,
-                          style: AppConstants.headline6.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              team.number,
+                              style: AppConstants.headline6.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (teamTier != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: tierColor!.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+                                  border: Border.all(color: tierColor, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.stars,
+                                      size: 10,
+                                      color: tierColor,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      SpecialTeamsService.instance.getTierDisplayName(teamTier),
+                                      style: AppConstants.caption.copyWith(
+                                        color: tierColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         if (team.name.isNotEmpty)
                           Text(

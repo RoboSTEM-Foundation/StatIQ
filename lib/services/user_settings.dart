@@ -12,6 +12,7 @@ class UserSettings extends ChangeNotifier {
   static const String _robotEventsApiKeyKey = 'robotevents_api_key';
   static const String _isDarkModeKey = 'isDarkMode';
   static const String _myTeamKey = 'my_team';
+  static const String _skillsGradeLevelKey = 'skills_grade_level';
   
   static UserSettings? _instance;
   static SharedPreferences? _prefs;
@@ -27,6 +28,7 @@ class UserSettings extends ChangeNotifier {
   String? _robotEventsApiKey;
   bool _isDarkMode = false;
   String? _myTeam;
+  String _skillsGradeLevel = 'Middle School';
   
   // Getters
   String get gradeLevel => _gradeLevel;
@@ -39,6 +41,7 @@ class UserSettings extends ChangeNotifier {
   String? get robotEventsApiKey => _robotEventsApiKey;
   bool get isDarkMode => _isDarkMode;
   String? get myTeam => _myTeam;
+  String get skillsGradeLevel => _skillsGradeLevel;
   
   // Available grade levels for VEX IQ
   static const List<String> availableGradeLevels = [
@@ -74,6 +77,7 @@ class UserSettings extends ChangeNotifier {
     _favoriteEvents = _prefs!.getStringList(_favoriteEventsKey) ?? [];
     _robotEventsApiKey = _prefs!.getString(_robotEventsApiKeyKey);
     _myTeam = _prefs!.getString(_myTeamKey);
+    _skillsGradeLevel = _prefs!.getString(_skillsGradeLevelKey) ?? 'Middle School';
     notifyListeners();
   }
   
@@ -96,6 +100,7 @@ class UserSettings extends ChangeNotifier {
     if (_myTeam != null) {
       await _prefs!.setString(_myTeamKey, _myTeam!);
     }
+    await _prefs!.setString(_skillsGradeLevelKey, _skillsGradeLevel);
     notifyListeners();
   }
   
@@ -245,6 +250,7 @@ class UserSettings extends ChangeNotifier {
       'robotEventsApiKey': _robotEventsApiKey,
       'isDarkMode': _isDarkMode,
       'myTeam': _myTeam,
+      'skillsGradeLevel': _skillsGradeLevel,
     };
   }
   
@@ -260,6 +266,7 @@ class UserSettings extends ChangeNotifier {
     _robotEventsApiKey = json['robotEventsApiKey'];
     _isDarkMode = json['isDarkMode'] ?? false;
     _myTeam = json['myTeam'];
+    _skillsGradeLevel = json['skillsGradeLevel'] ?? 'Middle School';
     
     await _saveSettings();
     notifyListeners();
@@ -268,6 +275,14 @@ class UserSettings extends ChangeNotifier {
   Future<void> setMyTeam(String? teamNumber) async {
     if (_myTeam != teamNumber) {
       _myTeam = teamNumber;
+      await _saveSettings();
+      notifyListeners();
+    }
+  }
+
+  Future<void> setSkillsGradeLevel(String grade) async {
+    if (_skillsGradeLevel != grade) {
+      _skillsGradeLevel = grade;
       await _saveSettings();
       notifyListeners();
     }

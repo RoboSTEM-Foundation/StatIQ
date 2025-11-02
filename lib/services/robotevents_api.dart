@@ -65,9 +65,11 @@ class RobotEventsAPI {
     Map<String, dynamic>? params,
   }) async {
     try {
-      // Build URL with parameters
-      final uri = Uri.parse('${ApiConfig.robotEventsBaseUrl}$requestUrl');
-      final uriWithParams = params != null ? uri.replace(queryParameters: _convertParamsToStrings(params)) : uri;
+      // Build URL with parameters (supports repeated keys like level[]=Signature)
+      final uriWithParams = _buildUriWithParams(
+        baseUrl: '${ApiConfig.robotEventsBaseUrl}$requestUrl',
+        params: params,
+      );
       
       print('API Request: $uriWithParams');
       
@@ -96,20 +98,28 @@ class RobotEventsAPI {
     }
   }
 
-  // Convert parameters to strings for HTTP request
-  static Map<String, String> _convertParamsToStrings(Map<String, dynamic> params) {
-    final result = <String, String>{};
+  // Build a Uri that supports repeated query keys for array params (e.g., level[]=Signature)
+  static Uri _buildUriWithParams({required String baseUrl, Map<String, dynamic>? params}) {
+    if (params == null || params.isEmpty) {
+      return Uri.parse(baseUrl);
+    }
+
+    final queryParts = <String>[];
     params.forEach((key, value) {
+      if (value == null) return;
+
       if (value is List) {
-        // Handle array parameters
-        for (int i = 0; i < value.length; i++) {
-          result['$key[$i]'] = value[i].toString();
+        final keyName = key.endsWith('[]') ? key : '${key}[]';
+        for (final item in value) {
+          queryParts.add('${Uri.encodeQueryComponent(keyName)}=${Uri.encodeQueryComponent(item.toString())}');
         }
       } else {
-        result[key] = value.toString();
+        queryParts.add('${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(value.toString())}');
       }
     });
-    return result;
+
+    final separator = baseUrl.contains('?') ? '&' : '?';
+    return Uri.parse('$baseUrl$separator${queryParts.join('&')}');
   }
   
   // Search teams (matches Swift Team.fetch_info implementation exactly)
@@ -312,14 +322,26 @@ class RobotEventsAPI {
   static Future<List<dynamic>> getWorldSkillsRankings({
     int? seasonId,
     int page = 1,
+    String gradeLevel = 'Middle School',
   }) async {
     final effectiveSeasonId = seasonId ?? ApiConfig.currentVexIQSeasonId;
+    
+    // Map UI grade level names to API parameter values
+    String apiGradeLevel = gradeLevel;
+    if (gradeLevel == 'Elementary School') {
+      apiGradeLevel = 'Elementary';
+    } else if (gradeLevel == 'Middle School') {
+      apiGradeLevel = 'Middle School';
+    }
+    
     final params = <String, String>{
       'post_season': '0',
-      'grade_level': 'Middle School',
+      'grade_level': apiGradeLevel,
     };
     
     final url = 'https://www.robotevents.com/api/seasons/$effectiveSeasonId/skills';
+    
+    print('🌍 Loading world skills rankings for $apiGradeLevel (from $gradeLevel)');
     
     try {
       final response = await http.get(
@@ -332,13 +354,14 @@ class RobotEventsAPI {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as List<dynamic>;
+        print('✅ Loaded ${data.length} world skills rankings for $apiGradeLevel');
         return data;
       } else {
-        print('Error loading skills rankings: ${response.statusCode}');
+        print('❌ Error loading skills rankings: ${response.statusCode}');
         return [];
       }
     } catch (e) {
-      print('Error loading skills rankings: $e');
+      print('❌ Error loading skills rankings: $e');
       return [];
     }
   }

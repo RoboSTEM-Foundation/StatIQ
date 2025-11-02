@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/services/team_sync_service.dart';
 import 'package:stat_iq/services/optimized_team_search.dart';
+import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:provider/provider.dart';
@@ -480,6 +481,9 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
         return Consumer<UserSettings>(
           builder: (context, userSettings, child) {
             final isMyTeam = userSettings.myTeam == team.number;
+            final teamTier = SpecialTeamsService.instance.getTeamTier(team.number);
+            final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
+            final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
             
             return Card(
               margin: const EdgeInsets.symmetric(
@@ -488,12 +492,14 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
               elevation: AppConstants.elevationS,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-                side: isMyTeam ? BorderSide(
-                  color: AppConstants.vexIQBlue,
+                side: (isMyTeam || tierColor != null) ? BorderSide(
+                  color: tierColor ?? AppConstants.vexIQBlue,
                   width: 2,
                 ) : BorderSide.none,
               ),
-              color: isMyTeam ? AppConstants.vexIQBlue.withOpacity(0.1) : null,
+              color: (isMyTeam || tierColor != null) 
+                  ? (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1) 
+                  : null,
               child: InkWell(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
                 onTap: () => _onTeamTap(teamData),
@@ -505,7 +511,9 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                       Row(
                         children: [
                           CircleAvatar(
-                            backgroundColor: isMyTeam ? AppConstants.vexIQBlue : AppConstants.vexIQOrange,
+                            backgroundColor: (isMyTeam || tierColor != null) 
+                                ? (tierColor ?? AppConstants.vexIQBlue) 
+                                : AppConstants.vexIQOrange,
                             radius: 24,
                             child: Text(
                               team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
@@ -587,6 +595,41 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                   // Team info
                   Row(
                     children: [
+                      if (teamTier != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppConstants.spacingS,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
+                            border: Border.all(
+                              color: tierColor ?? AppConstants.vexIQBlue,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.stars,
+                                size: 12,
+                                color: tierColor ?? AppConstants.vexIQBlue,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                SpecialTeamsService.instance.getTierDisplayName(teamTier),
+                                style: AppConstants.caption.copyWith(
+                                  color: tierColor ?? AppConstants.vexIQBlue,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: AppConstants.spacingS),
+                      ],
                       if (team.grade.isNotEmpty) ...[
                         Container(
                           padding: const EdgeInsets.symmetric(
