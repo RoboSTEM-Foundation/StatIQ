@@ -7,9 +7,12 @@ import '../models/team.dart';
 import '../services/robotevents_api.dart';
 import '../services/user_settings.dart';
 import '../services/optimized_team_search.dart';
-// import '../services/notification_service.dart';
+import '../services/team_sync_service.dart';
+import '../services/notification_service.dart';
 import '../constants/app_constants.dart';
 import '../utils/theme_utils.dart';
+import '../widgets/optimized_team_search_widget.dart';
+import '../widgets/simple_team_search_widget.dart';
 import 'team_details_screen.dart';
 
 class EventDetailsScreen extends StatefulWidget {
@@ -120,9 +123,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         _matchesError = null;
       });
 
-      // Load matches for each division (like Elapse app pattern)
-      Map<int, List<dynamic>> matchesByDivision = {};
-      for (final division in _divisions) {
+      // Load matches for all divisions in parallel
+      final matchesFutures = _divisions.map((division) async {
         try {
           final divisionId = division['id'] as int;
           final divisionName = division['name']?.toString() ?? 'Division ${division['order']?.toString() ?? ''}';
@@ -132,15 +134,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             divisionId: divisionId,
           );
           
-          // Store matches by division ID for easy access
-          matchesByDivision[divisionId] = divisionMatches;
           print('Loaded ${divisionMatches.length} matches for division: $divisionName');
-          
+          return MapEntry(divisionId, divisionMatches);
         } catch (e) {
           print('Error loading matches for division ${division['id']}: $e');
-          matchesByDivision[division['id'] as int] = [];
+          return MapEntry(division['id'] as int, <dynamic>[]);
         }
-      }
+      });
+
+      // Wait for all division matches to load in parallel
+      final matchesResults = await Future.wait(matchesFutures);
+      final matchesByDivision = Map<int, List<dynamic>>.fromEntries(matchesResults);
       
       if (mounted) {
         setState(() {
@@ -152,6 +156,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             _selectedDivisionId = _divisions.first['id'] as int;
           }
         });
+        
+        // Schedule notifications for future matches with the user's team
+        await _scheduleEventNotifications(matchesByDivision);
       }
     } catch (e) {
       if (mounted) {
@@ -219,9 +226,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         _rankingsError = null;
       });
 
-      // Load rankings for each division (like VRC RoboScout)
-      Map<int, List<dynamic>> rankingsByDivision = {};
-      for (final division in _divisions) {
+      // Load rankings for all divisions in parallel
+      final rankingsFutures = _divisions.map((division) async {
         try {
           final divisionId = division['id'] as int;
           final divisionName = division['name']?.toString() ?? 'Division ${division['order']?.toString() ?? ''}';
@@ -231,15 +237,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             divisionId: divisionId,
           );
           
-          // Store rankings by division ID for easy access
-          rankingsByDivision[divisionId] = divisionRankings;
           print('Loaded ${divisionRankings.length} rankings for division: $divisionName');
-          
+          return MapEntry(divisionId, divisionRankings);
         } catch (e) {
           print('Error loading rankings for division ${division['id']}: $e');
-          rankingsByDivision[division['id'] as int] = [];
+          return MapEntry(division['id'] as int, <dynamic>[]);
         }
-      }
+      });
+
+      // Wait for all division rankings to load in parallel
+      final rankingsResults = await Future.wait(rankingsFutures);
+      final rankingsByDivision = Map<int, List<dynamic>>.fromEntries(rankingsResults);
       
       if (mounted) {
         setState(() {
@@ -1111,45 +1119,104 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               bottom: BorderSide(color: Colors.grey[300]!, width: 1),
             ),
           ),
-          child: Row(
-            children: [
-              Icon(Icons.notifications_active, color: AppConstants.vexIQGreen),
-              const SizedBox(width: AppConstants.spacingS),
-          Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                    Text(
-                      'Team Notifications',
-                      style: AppConstants.bodyText1.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.vexIQGreen,
+          child: Consumer<UserSettings>(
+            builder: (context, settings, child) {
+              if (settings.myTeam != null && settings.notificationsEnabled) {
+                // Show configured notifications with next 5 matches
+                final nextMatches = _getNext5MatchesForTeam(settings.myTeam!);
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.notifications_active, color: AppConstants.vexIQGreen),
+                        const SizedBox(width: AppConstants.spacingS),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Team ${settings.myTeam} Notifications',
+                                style: AppConstants.bodyText1.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppConstants.vexIQGreen,
+                                ),
+                              ),
+                              Text(
+                                '${settings.notificationMinutesBefore}m before each match',
+                                style: AppConstants.caption.copyWith(
+                                  color: ThemeUtils.getSecondaryTextColor(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _showTeamNotificationDialog(),
+                          color: AppConstants.vexIQGreen,
+                        ),
+                      ],
+                    ),
+                    if (nextMatches.isNotEmpty) ...[
+                      const Divider(height: 20),
+                      SizedBox(
+                        height: 80,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: nextMatches.length,
+                          itemBuilder: (context, index) {
+                            final match = nextMatches[index];
+                            return _buildNextMatchChip(match);
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              } else {
+                // Show add team button
+                return Row(
+                  children: [
+                    Icon(Icons.notifications_active, color: AppConstants.vexIQGreen),
+                    const SizedBox(width: AppConstants.spacingS),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Team Notifications',
+                            style: AppConstants.bodyText1.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppConstants.vexIQGreen,
+                            ),
+                          ),
+                          Text(
+                            'Get notified before your team\'s matches',
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      'Get notified 1 hour before your team\'s matches',
-                      style: AppConstants.caption.copyWith(
-                        color: ThemeUtils.getSecondaryTextColor(context),
+                    ElevatedButton.icon(
+                      onPressed: () => _showTeamNotificationDialog(),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add Team'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppConstants.vexIQGreen,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppConstants.spacingM,
+                          vertical: AppConstants.spacingS,
+                        ),
                       ),
                     ),
-              ],
-            ),
+                  ],
+                );
+              }
+            },
           ),
-              ElevatedButton.icon(
-                onPressed: () => _showTeamNotificationDialog(),
-                icon: Icon(Icons.add, size: 16),
-                label: Text('Add Team'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppConstants.vexIQGreen,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacingM,
-                    vertical: AppConstants.spacingS,
-                  ),
-            ),
-          ),
-        ],
-      ),
         ),
         
                 // Division selector header
@@ -1699,11 +1766,128 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   void _showTeamNotificationDialog() {
-    // TODO: Implement when notifications are re-enabled
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Team notifications coming soon!'),
-        backgroundColor: AppConstants.vexIQGreen,
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Team Notifications'),
+        content: StatefulBuilder(
+          builder: (context, setState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Consumer<UserSettings>(
+                builder: (context, settings, child) => SwitchListTile(
+                  title: const Text('Enable Notifications'),
+                  subtitle: const Text('Get notified before matches'),
+                  value: settings.notificationsEnabled,
+                  onChanged: (value) async {
+                    await settings.setNotificationsEnabled(value);
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (userSettings.notificationsEnabled) ...[
+                const Divider(),
+                Consumer<UserSettings>(
+                  builder: (context, settings, child) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Notifications for:',
+                        style: AppConstants.bodyText1,
+                      ),
+                      const SizedBox(height: 8),
+                      if (settings.myTeam != null) ...[
+                        ListTile(
+                          leading: const Icon(Icons.groups, color: AppConstants.vexIQBlue),
+                          title: Text('Team ${settings.myTeam}'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _showTeamSelectorDialog(context, settings);
+                            },
+                          ),
+                        ),
+                      ] else ...[
+                        TextButton.icon(
+                          icon: const Icon(Icons.add_circle),
+                          label: const Text('Add Team'),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _showTeamSelectorDialog(context, settings);
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                Consumer<UserSettings>(
+                  builder: (context, settings, child) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Minutes before match:',
+                        style: AppConstants.bodyText1,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [5, 10, 15, 30, 60].map((minutes) {
+                          return ChoiceChip(
+                            label: Text('${minutes}m'),
+                            selected: settings.notificationMinutesBefore == minutes,
+                            onSelected: (selected) async {
+                              if (selected) {
+                                await settings.setNotificationMinutesBefore(minutes);
+                              }
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTeamSelectorDialog(BuildContext context, UserSettings userSettings) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Your Team'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: SimpleTeamSearchWidget(
+            useAPI: true, // Use API-based search
+            onTeamSelected: (team) {
+              userSettings.setMyTeam(team.number);
+              Navigator.of(context).pop();
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
   }
@@ -2485,7 +2669,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     
     // Try multiple fields for team name, excluding the number field
     String teamName = (teamData is Map) 
-        ? (teamData['team_name']?.toString() ?? 
+        ? (teamData['teamName']?.toString() ??
+           teamData['team_name']?.toString() ?? 
            teamData['robot_name']?.toString() ?? 
            teamData['organization']?.toString() ?? 
            teamData['nickname']?.toString() ?? 
@@ -2735,19 +2920,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
 
   Future<String> _getTeamNameFromCache(String teamNumber) async {
     try {
-      // Search in our cached team database using OptimizedTeamSearch
-      final searchResults = OptimizedTeamSearch.search(teamNumber);
-      if (searchResults.isNotEmpty) {
-        // Find exact match
-        for (final teamData in searchResults) {
-          final cachedTeamNumber = (teamData['number'] ?? '').toString();
-          if (cachedTeamNumber.toLowerCase() == teamNumber.toLowerCase()) {
-            final teamName = (teamData['name'] ?? '').toString();
-            if (teamName.isNotEmpty) {
-              print('✅ Found team name in cache: $teamNumber -> $teamName');
-              return teamName;
-            }
-          }
+      // Get team by number directly from cache
+      final teamData = await TeamSyncService.getTeamByNumber(teamNumber);
+      if (teamData != null) {
+        final teamName = (teamData['name'] ?? '').toString();
+        if (teamName.isNotEmpty) {
+          print('✅ Found team name in cache: $teamNumber -> $teamName');
+          return teamName;
         }
       }
       print('⚠️ No team name found in cache for $teamNumber');
@@ -2980,7 +3159,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     
     // Try multiple fields for team name, excluding the number field
     String teamName = (teamData is Map) 
-        ? (teamData['team_name']?.toString() ?? 
+        ? (teamData['teamName']?.toString() ??
+           teamData['team_name']?.toString() ?? 
            teamData['robot_name']?.toString() ?? 
            teamData['organization']?.toString() ?? 
            teamData['nickname']?.toString() ?? 
@@ -3375,7 +3555,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     
     // Try multiple fields for team name
     String teamName = (teamData is Map) 
-        ? (teamData['team_name']?.toString() ?? 
+        ? (teamData['teamName']?.toString() ??
+           teamData['team_name']?.toString() ?? 
            teamData['robot_name']?.toString() ?? 
            teamData['organization']?.toString() ?? 
            teamData['nickname']?.toString() ?? 
@@ -4233,6 +4414,190 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return 'Not Scheduled';
   }
 
+  Future<void> _scheduleEventNotifications(Map<int, List<dynamic>> matchesByDivision) async {
+    if (!mounted) return;
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+    if (!userSettings.notificationsEnabled || userSettings.myTeam == null) return;
+    final userTeamNumber = userSettings.myTeam!;
+    final now = DateTime.now();
+    final allMatches = <dynamic>[];
+    for (final matches in matchesByDivision.values) {
+      allMatches.addAll(matches);
+    }
+    final futureMatchesWithUserTeam = <dynamic>[];
+    for (final match in allMatches) {
+      final scheduledTime = match['scheduled']?.toString() ?? '';
+      if (scheduledTime.isEmpty) continue;
+      DateTime? matchDateTime;
+      try {
+        final utcDateTime = DateTime.parse(scheduledTime);
+        matchDateTime = utcDateTime.toLocal();
+        if (!matchDateTime.isAfter(now)) continue;
+      } catch (e) {
+        continue;
+      }
+      final alliances = match['alliances'] as List<dynamic>? ?? [];
+      bool userTeamInMatch = false;
+      for (final alliance in alliances) {
+        final teams = alliance['teams'] as List<dynamic>? ?? [];
+        for (final teamData in teams) {
+          final teamInfo = teamData['team'] as Map<String, dynamic>? ?? teamData as Map<String, dynamic>?;
+          if (teamInfo != null) {
+            final teamNumber = teamInfo['number'] as String? ?? teamInfo['name'] as String? ?? '';
+            if (teamNumber.toLowerCase() == userTeamNumber.toLowerCase()) {
+              userTeamInMatch = true;
+              break;
+            }
+          }
+        }
+        if (userTeamInMatch) break;
+      }
+      if (userTeamInMatch) {
+        futureMatchesWithUserTeam.add({'match': match, 'scheduledTime': matchDateTime});
+      }
+    }
+    print('📱 Found ${futureMatchesWithUserTeam.length} future matches with team $userTeamNumber in event ${widget.event.id}');
+    await NotificationService().cancelAllMatchNotifications();
+    for (final matchInfo in futureMatchesWithUserTeam) {
+      final match = matchInfo['match'] as Map<String, dynamic>;
+      final scheduledTime = matchInfo['scheduledTime'] as DateTime;
+      try {
+        final matchName = match['name']?.toString() ?? 'Match';
+        final field = match['field']?.toString() ?? 'Field';
+        final matchId = match['id'] as int? ?? 0;
+        String divisionName = widget.event.name;
+        if (_selectedDivisionId != null) {
+          final division = _divisions.firstWhere((d) => d['id'] == _selectedDivisionId, orElse: () => {});
+          divisionName = division['name']?.toString() ?? widget.event.name;
+        }
+        await NotificationService().scheduleMatchNotification(
+          matchName: matchName,
+          divisionName: divisionName,
+          field: field,
+          scheduledTime: scheduledTime,
+          matchId: matchId,
+          minutesBefore: userSettings.notificationMinutesBefore,
+          teamNumber: userTeamNumber,
+        );
+      } catch (e) {
+        print('❌ Error scheduling notification for match: $e');
+      }
+    }
+    print('✅ Scheduled ${futureMatchesWithUserTeam.length} notifications for event');
+  }
+
+  List<Map<String, dynamic>> _getNext5MatchesForTeam(String teamNumber) {
+    final allMatches = <Map<String, dynamic>>[];
+    
+    // Collect all matches from all divisions
+    for (final matches in _matchesByDivision.values) {
+      allMatches.addAll(matches.cast<Map<String, dynamic>>());
+    }
+    
+    final now = DateTime.now();
+    final teamMatches = <Map<String, dynamic>>[];
+    
+    for (final match in allMatches) {
+      // Check if match has scheduled time
+      final scheduledTime = match['scheduled']?.toString() ?? '';
+      if (scheduledTime.isEmpty) continue;
+      
+      // Parse and check if in future
+      DateTime? matchDateTime;
+      try {
+        final utcDateTime = DateTime.parse(scheduledTime);
+        matchDateTime = utcDateTime.toLocal();
+        if (!matchDateTime.isAfter(now)) continue;
+      } catch (e) {
+        continue;
+      }
+      
+      // Check if team is in this match
+      final alliances = match['alliances'] as List<dynamic>? ?? [];
+      bool teamInMatch = false;
+      
+      for (final alliance in alliances) {
+        final teams = alliance['teams'] as List<dynamic>? ?? [];
+        for (final teamData in teams) {
+          final teamInfo = teamData['team'] as Map<String, dynamic>? ?? teamData as Map<String, dynamic>?;
+          if (teamInfo != null) {
+            final matchTeamNumber = teamInfo['number'] as String? ?? 
+                                   teamInfo['name'] as String? ?? '';
+            if (matchTeamNumber.toLowerCase() == teamNumber.toLowerCase()) {
+              teamInMatch = true;
+              break;
+            }
+          }
+        }
+        if (teamInMatch) break;
+      }
+      
+      if (teamInMatch) {
+        teamMatches.add({
+          'match': match,
+          'scheduledTime': matchDateTime!,
+        });
+      }
+    }
+    
+    // Sort by scheduled time and return top 5
+    teamMatches.sort((a, b) => a['scheduledTime'].compareTo(b['scheduledTime']));
+    return teamMatches.take(5).toList();
+  }
+
+  Widget _buildNextMatchChip(Map<String, dynamic> matchInfo) {
+    final match = matchInfo['match'] as Map<String, dynamic>;
+    final scheduledTime = matchInfo['scheduledTime'] as DateTime;
+    final matchName = match['name']?.toString() ?? 'Match';
+    final field = match['field']?.toString() ?? '';
+    
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: AppConstants.vexIQGreen.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppConstants.vexIQGreen.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            matchName,
+            style: AppConstants.caption.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppConstants.vexIQGreen,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')} ${scheduledTime.hour >= 12 ? 'PM' : 'AM'}',
+            style: AppConstants.caption.copyWith(
+              color: ThemeUtils.getSecondaryTextColor(context),
+            ),
+          ),
+          if (field.isNotEmpty)
+            Text(
+              'Field $field',
+              style: AppConstants.caption.copyWith(
+                color: AppConstants.vexIQGreen,
+                fontSize: 10,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
 
 
 
@@ -4534,6 +4899,4 @@ class DivisionMatchesScreen extends StatelessWidget {
     return 'Not Scheduled';
   }
 
-
-
-} 
+}

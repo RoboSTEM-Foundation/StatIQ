@@ -295,15 +295,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showNotificationsDialog(BuildContext context) {
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Notifications'),
-        content: const Text('Notification settings coming soon...'),
+        content: StatefulBuilder(
+          builder: (context, setState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Consumer<UserSettings>(
+                builder: (context, settings, child) => SwitchListTile(
+                  title: const Text('Enable Notifications'),
+                  subtitle: const Text('Get notified before matches'),
+                  value: settings.notificationsEnabled,
+                  onChanged: (value) async {
+                    await settings.setNotificationsEnabled(value);
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (userSettings.notificationsEnabled) ...[
+                const Divider(),
+                Consumer<UserSettings>(
+                  builder: (context, settings, child) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Notifications for:',
+                        style: AppConstants.bodyText1,
+                      ),
+                      const SizedBox(height: 8),
+                      if (settings.myTeam != null) ...[
+                        ListTile(
+                          leading: const Icon(Icons.groups, color: AppConstants.vexIQBlue),
+                          title: Text('Team ${settings.myTeam}'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _showMyTeamDialog(context, settings);
+                            },
+                          ),
+                        ),
+                      ] else ...[
+                        TextButton.icon(
+                          icon: const Icon(Icons.add_circle),
+                          label: const Text('Add Team'),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _showMyTeamDialog(context, settings);
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                Consumer<UserSettings>(
+                  builder: (context, settings, child) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Minutes before match:',
+                        style: AppConstants.bodyText1,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [5, 10, 15, 30, 60].map((minutes) {
+                          return ChoiceChip(
+                            label: Text('${minutes}m'),
+                            selected: settings.notificationMinutesBefore == minutes,
+                            onSelected: (selected) async {
+                              if (selected) {
+                                await settings.setNotificationMinutesBefore(minutes);
+                              }
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: const Text('Close'),
           ),
         ],
       ),

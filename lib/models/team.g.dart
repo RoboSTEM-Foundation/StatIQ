@@ -88,6 +88,7 @@ Match _$MatchFromJson(Map<String, dynamic> json) => Match(
       field: (json['field'] as num?)?.toInt() ?? 0,
       instance: (json['instance'] as num?)?.toInt() ?? 0,
       tournamentLevel: (json['tournamentLevel'] as num?)?.toInt() ?? 0,
+      eventId: (json['eventId'] as num?)?.toInt(),
       alliances: (json['alliances'] as List<dynamic>?)
               ?.map((e) => MatchTeam.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -108,6 +109,7 @@ Map<String, dynamic> _$MatchToJson(Match instance) => <String, dynamic>{
       'field': instance.field,
       'instance': instance.instance,
       'tournamentLevel': instance.tournamentLevel,
+      'eventId': instance.eventId,
       'alliances': instance.alliances,
       'redScore': instance.redScore,
       'blueScore': instance.blueScore,

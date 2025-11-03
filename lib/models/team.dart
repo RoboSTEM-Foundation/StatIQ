@@ -179,6 +179,7 @@ class Match {
   final int field;
   final int instance;
   final int tournamentLevel;
+  final int? eventId;
   final List<MatchTeam> alliances;
   final MatchScore? redScore;
   final MatchScore? blueScore;
@@ -191,6 +192,7 @@ class Match {
     this.field = 0,
     this.instance = 0,
     this.tournamentLevel = 0,
+    this.eventId,
     this.alliances = const [],
     this.redScore,
     this.blueScore,
@@ -216,6 +218,11 @@ class Match {
       field: parseField(json['field']),
       instance: parseField(json['instance']),
       tournamentLevel: parseField(json['tournamentLevel']),
+      eventId: json['event'] != null ? (json['event'] is int 
+          ? json['event'] as int 
+          : (json['event'] is Map 
+              ? (json['event']['id'] as num?)?.toInt() 
+              : null)) : null,
       alliances: (json['alliances'] as List<dynamic>?)
               ?.map((e) => MatchTeam.fromJson(e as Map<String, dynamic>))
               .toList() ??

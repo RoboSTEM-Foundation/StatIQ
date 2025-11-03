@@ -227,6 +227,8 @@ class _EventsScreenState extends State<EventsScreen> {
         seasonId: _selectedSeasonId,
         levels: _selectedEventLevels.isNotEmpty ? _selectedEventLevels : null,
         page: 1,
+        fromDate: _dateRangeStart,
+        toDate: _dateRangeEnd,
       );
 
       // Apply only client-side filters that can't be done via API
@@ -282,6 +284,8 @@ class _EventsScreenState extends State<EventsScreen> {
         query: query.trim().isEmpty ? null : query.trim(),
         seasonId: hasSeasonInfo ? null : _selectedSeasonId, // Let auto-detection work if query has season
         levels: _selectedEventLevels.isNotEmpty ? _selectedEventLevels : null,
+        fromDate: _dateRangeStart,
+        toDate: _dateRangeEnd,
       );
       
       print('🔍 Events Screen: Found ${events.length} events');
