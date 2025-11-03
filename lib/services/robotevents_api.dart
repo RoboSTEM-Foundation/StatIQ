@@ -472,6 +472,8 @@ class RobotEventsAPI {
     int? levelClass,
     List<String>? levels,
     int page = 1,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
     print('=== Event Search Debug ===');
     print('Query: $query');
@@ -487,6 +489,8 @@ class RobotEventsAPI {
         levelClass: levelClass,
         levels: levels,
         page: page,
+        fromDate: fromDate,
+        toDate: toDate,
       );
     }
     
@@ -547,9 +551,12 @@ class RobotEventsAPI {
       params.forEach((key, value) {
         if (value == null) return;
         
-        if (key == 'from_date') {
-          // Always use proper date format for global search
-          scrapingParams[key] = '1970-01-01';
+        if (key == 'from_date' && value != null) {
+          // Use the provided from_date or default to 1970
+          scrapingParams[key] = value.toString();
+        } else if (key == 'to_date' && value != null) {
+          // Use the provided to_date
+          scrapingParams[key] = value.toString();
         } else if (key == 'grade_level_id' && value != null) {
           // For VEX IQ, skip grade level restrictions to get both MS and ES
           // This helps find more events
@@ -753,6 +760,8 @@ class RobotEventsAPI {
     int? levelClass,
     List<String>? levels,
     int page = 1,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
     print('=== Enhanced Event Search Debug ===');
     print('Query: $query');
@@ -814,8 +823,16 @@ class RobotEventsAPI {
       // For VEX IQ, don't restrict by grade level to get both MS and ES events
       // scrapingParams['grade_level_id'] = 2;
       
-      // Use fixed date format that matches your working URL
-      scrapingParams['from_date'] = '1970-01-01';
+      // Add date range if provided
+      if (fromDate != null) {
+        scrapingParams['from_date'] = fromDate.toIso8601String().split('T')[0];
+      } else {
+        scrapingParams['from_date'] = '1970-01-01';
+      }
+      
+      if (toDate != null) {
+        scrapingParams['to_date'] = toDate.toIso8601String().split('T')[0];
+      }
       
       print('Scraping with params: $scrapingParams');
       

@@ -11,7 +11,7 @@ import 'package:stat_iq/screens/settings_screen.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/special_teams_service.dart';
-// import 'package:stat_iq/services/notification_service.dart';
+import 'package:stat_iq/services/notification_service.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
 
@@ -49,8 +49,8 @@ Future<void> _initializeServices() async {
     await SpecialTeamsService.instance.load();
     
     // Initialize notification service
-    // await NotificationService().initialize();
-    // print('✅ Notification service initialized');
+    await NotificationService().initialize();
+    print('✅ Notification service initialized');
     
     // Check API configuration
     if (ApiConfig.isApiKeyConfigured) {

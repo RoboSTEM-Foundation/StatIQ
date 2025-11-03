@@ -3,11 +3,14 @@ import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/services/special_teams_service.dart';
+import 'package:stat_iq/services/notification_service.dart';
+import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/widgets/vex_iq_score_card.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 // import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
+import 'package:provider/provider.dart';
 
 class TeamDetailsScreen extends StatefulWidget {
   final Team team;
@@ -206,6 +209,11 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         if (b.scheduled == null) return -1;
         return a.scheduled!.compareTo(b.scheduled!);
       });
+
+      // Schedule notifications for future matches if this is the user's team
+      if (mounted) {
+        await _scheduleNotifications(allMatches);
+      }
 
       if (mounted) {
         setState(() {
@@ -524,8 +532,15 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
     // Find the event for this match
     Event? eventForMatch;
     if (widget.eventId != null) {
+      // If we're viewing a specific event, use that event
       eventForMatch = _teamEvents.firstWhere(
         (e) => e.id == widget.eventId,
+        orElse: () => _teamEvents.first,
+      );
+    } else if (match.eventId != null) {
+      // Use the event ID from the match itself
+      eventForMatch = _teamEvents.firstWhere(
+        (e) => e.id == match.eventId,
         orElse: () => _teamEvents.first,
       );
     } else if (match.scheduled != null) {
@@ -542,6 +557,9 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         }
       }
       eventForMatch = (closestEvent != null && minDaysDiff <= 7) ? closestEvent : _teamEvents.isNotEmpty ? _teamEvents.first : null;
+    } else {
+      // No time info, try to find any event (best effort)
+      eventForMatch = _teamEvents.isNotEmpty ? _teamEvents.first : null;
     }
 
     return Card(
@@ -1353,5 +1371,61 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         backgroundColor: AppConstants.vexIQBlue,
       ),
     );
+  }
+
+  Future<void> _scheduleNotifications(List<Match> matches) async {
+    if (!mounted) return;
+    
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+    
+    // Only schedule if notifications are enabled and user has set their team
+    if (!userSettings.notificationsEnabled || userSettings.myTeam == null) {
+      return;
+    }
+    
+    // Only schedule for the user's team
+    final currentTeamNumber = (_currentTeam ?? widget.team).number;
+    if (currentTeamNumber != userSettings.myTeam) {
+      return;
+    }
+    
+    // Find future matches with scheduled times
+    final now = DateTime.now();
+    final futureMatches = matches.where((match) {
+      return match.scheduled != null && match.scheduled!.isAfter(now);
+    }).toList();
+    
+    print('📱 Scheduling notifications for ${futureMatches.length} future matches');
+    
+    // Cancel all existing notifications first
+    await NotificationService().cancelAllMatchNotifications();
+    
+    // Schedule notifications for each future match
+    for (final match in futureMatches) {
+      try {
+        // Get event info for the match
+        Event? eventForMatch;
+        if (match.eventId != null) {
+          eventForMatch = _teamEvents.firstWhere(
+            (e) => e.id == match.eventId,
+            orElse: () => _teamEvents.first,
+          );
+        }
+        
+        await NotificationService().scheduleMatchNotification(
+          matchName: match.name,
+          divisionName: eventForMatch?.name ?? 'Event',
+          field: match.field.toString(),
+          scheduledTime: match.scheduled!,
+          matchId: match.id,
+          minutesBefore: userSettings.notificationMinutesBefore,
+          teamNumber: currentTeamNumber,
+        );
+      } catch (e) {
+        print('❌ Error scheduling notification for match ${match.id}: $e');
+      }
+    }
+    
+    print('✅ Scheduled ${futureMatches.length} notifications');
   }
 } 

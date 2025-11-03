@@ -13,6 +13,8 @@ class UserSettings extends ChangeNotifier {
   static const String _isDarkModeKey = 'isDarkMode';
   static const String _myTeamKey = 'my_team';
   static const String _skillsGradeLevelKey = 'skills_grade_level';
+  static const String _notificationsEnabledKey = 'notifications_enabled';
+  static const String _notificationMinutesBeforeKey = 'notification_minutes_before';
   
   static UserSettings? _instance;
   static SharedPreferences? _prefs;
@@ -29,6 +31,8 @@ class UserSettings extends ChangeNotifier {
   bool _isDarkMode = false;
   String? _myTeam;
   String _skillsGradeLevel = 'Middle School';
+  bool _notificationsEnabled = false;
+  int _notificationMinutesBefore = 15;
   
   // Getters
   String get gradeLevel => _gradeLevel;
@@ -42,6 +46,8 @@ class UserSettings extends ChangeNotifier {
   bool get isDarkMode => _isDarkMode;
   String? get myTeam => _myTeam;
   String get skillsGradeLevel => _skillsGradeLevel;
+  bool get notificationsEnabled => _notificationsEnabled;
+  int get notificationMinutesBefore => _notificationMinutesBefore;
   
   // Available grade levels for VEX IQ
   static const List<String> availableGradeLevels = [
@@ -78,6 +84,8 @@ class UserSettings extends ChangeNotifier {
     _robotEventsApiKey = _prefs!.getString(_robotEventsApiKeyKey);
     _myTeam = _prefs!.getString(_myTeamKey);
     _skillsGradeLevel = _prefs!.getString(_skillsGradeLevelKey) ?? 'Middle School';
+    _notificationsEnabled = _prefs!.getBool(_notificationsEnabledKey) ?? false;
+    _notificationMinutesBefore = _prefs!.getInt(_notificationMinutesBeforeKey) ?? 15;
     notifyListeners();
   }
   
@@ -101,6 +109,8 @@ class UserSettings extends ChangeNotifier {
       await _prefs!.setString(_myTeamKey, _myTeam!);
     }
     await _prefs!.setString(_skillsGradeLevelKey, _skillsGradeLevel);
+    await _prefs!.setBool(_notificationsEnabledKey, _notificationsEnabled);
+    await _prefs!.setInt(_notificationMinutesBeforeKey, _notificationMinutesBefore);
     notifyListeners();
   }
   
@@ -275,6 +285,22 @@ class UserSettings extends ChangeNotifier {
   Future<void> setMyTeam(String? teamNumber) async {
     if (_myTeam != teamNumber) {
       _myTeam = teamNumber;
+      await _saveSettings();
+      notifyListeners();
+    }
+  }
+  
+  Future<void> setNotificationsEnabled(bool enabled) async {
+    if (_notificationsEnabled != enabled) {
+      _notificationsEnabled = enabled;
+      await _saveSettings();
+      notifyListeners();
+    }
+  }
+  
+  Future<void> setNotificationMinutesBefore(int minutes) async {
+    if (_notificationMinutesBefore != minutes) {
+      _notificationMinutesBefore = minutes;
       await _saveSettings();
       notifyListeners();
     }
