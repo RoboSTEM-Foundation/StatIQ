@@ -25,7 +25,9 @@ class _EventsScreenState extends State<EventsScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   
   List<Event> _events = [];
+  List<Event> _currentEvents = [];
   Map<String, List<Event>> _groupedEvents = {};
+  Map<String, List<Event>> _groupedCurrentEvents = {};
   bool _isLoading = false;
   bool _hasSearched = false;
   String _errorMessage = '';
@@ -37,13 +39,14 @@ class _EventsScreenState extends State<EventsScreen> {
   // Filter states
   List<String> _selectedRegions = [];
   String _selectedTimeFrame = 'This Season';
-  bool _sortEarliestFirst = false; // Latest → earliest by default
+  bool _sortEarliestFirst = true; // Earliest → latest by default
   final Set<String> _collapsedWeeks = {};
   DateTime? _dateRangeStart;
   DateTime? _dateRangeEnd;
   
   // API filter states (Bug Patch 3 requirement) - consolidated into single event level filter
   List<String> _selectedEventLevels = [];
+  int _selectedEventsTabIndex = 1;
 
   @override
   void initState() {
@@ -101,6 +104,30 @@ class _EventsScreenState extends State<EventsScreen> {
     
     return weekGroups;
   }
+
+  List<Event> _filterCurrentEvents(List<Event> events) {
+    final now = DateTime.now();
+    final horizon = now.add(const Duration(days: 14));
+    return events.where((event) {
+      final start = event.start;
+      final end = event.end;
+      if (start == null && end == null) {
+        return true; // Unknown schedule, include in current list
+      }
+
+      DateTime effectiveStart = start ?? end ?? now;
+      DateTime effectiveEnd = end ?? start ?? now;
+
+      // Normalize ordering
+      if (effectiveEnd.isBefore(effectiveStart)) {
+        effectiveEnd = effectiveStart;
+      }
+
+      final overlapsWindow = !effectiveEnd.isBefore(now.subtract(const Duration(days: 1))) &&
+          !effectiveStart.isAfter(horizon);
+      return overlapsWindow;
+    }).toList();
+  }
   
   String _getWeekEnding(DateTime date) {
     // Calculate the Sunday that ends the week
@@ -118,9 +145,31 @@ class _EventsScreenState extends State<EventsScreen> {
 
     // Apply region filter (can't be done via API)
     if (_selectedRegions.isNotEmpty) {
+      final normalizedSelections = _selectedRegions
+          .map((region) => _normalizeRegion(region))
+          .where((region) => region.isNotEmpty)
+          .toList();
       filteredEvents = filteredEvents.where((event) {
-        final eventRegion = _getEventRegion(event);
-        return _selectedRegions.contains(eventRegion);
+        final eventRegion = _normalizeRegion(_getEventRegion(event));
+        final eventCountry = _normalizeRegion(event.country ?? '');
+        if (eventRegion.isEmpty && eventCountry.isEmpty) {
+          return false;
+        }
+        return normalizedSelections.any((region) {
+          if (eventRegion.isNotEmpty &&
+              (eventRegion == region ||
+               eventRegion.contains(region) ||
+               region.contains(eventRegion))) {
+            return true;
+          }
+          if (eventCountry.isNotEmpty &&
+              (eventCountry == region ||
+               eventCountry.contains(region) ||
+               region.contains(eventCountry))) {
+            return true;
+          }
+          return false;
+        });
       }).toList();
     }
 
@@ -173,6 +222,13 @@ class _EventsScreenState extends State<EventsScreen> {
     // Event type filtering is now done via API using level_class_id
     // No need for client-side event type filtering
 
+    if (_selectedEventLevels.isNotEmpty) {
+      filteredEvents = filteredEvents.where((event) {
+        final levelLabel = _getEventLevelLabel(event);
+        return _selectedEventLevels.contains(levelLabel);
+      }).toList();
+    }
+
     return filteredEvents;
   }
 
@@ -190,7 +246,28 @@ class _EventsScreenState extends State<EventsScreen> {
       return country;
     }
     
-    return 'Unknown';
+    return '';
+  }
+
+  String _normalizeRegion(String input) {
+    return input.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+  }
+
+  String _getEventLevelLabel(Event event) {
+    if (event.level.isNotEmpty) {
+      return ApiConfig.normalizeApiEventLevel(event.level);
+    }
+    final fallback = _deriveLevelFromMetadata(event);
+    return ApiConfig.normalizeApiEventLevel(fallback);
+  }
+
+  String _deriveLevelFromMetadata(Event event) {
+    final haystack = '${event.name} ${event.levelClassName}'.toLowerCase();
+    if (haystack.contains('world')) return 'world';
+    if (haystack.contains('signature') || haystack.contains('us open')) return 'signature';
+    if (haystack.contains('national')) return 'national';
+    if (haystack.contains('regional') || haystack.contains('state') || haystack.contains('provincial')) return 'regional';
+    return 'local';
   }
 
   String _getEventType(Event event) {
@@ -234,9 +311,14 @@ class _EventsScreenState extends State<EventsScreen> {
       // Apply only client-side filters that can't be done via API
       final filteredEvents = _applyClientSideFilters(events);
 
+      final currentEvents = _filterCurrentEvents(filteredEvents);
+      final groupedAll = _groupEventsByWeek(filteredEvents);
+      final groupedCurrent = _groupEventsByWeek(currentEvents);
       setState(() {
         _events = filteredEvents;
-        _groupedEvents = _groupEventsByWeek(filteredEvents);
+        _currentEvents = currentEvents;
+        _groupedEvents = groupedAll;
+        _groupedCurrentEvents = groupedCurrent;
         _isLoading = false;
         if (filteredEvents.isEmpty) {
           _errorMessage = 'No events found matching your filters for $_selectedSeason';
@@ -248,6 +330,8 @@ class _EventsScreenState extends State<EventsScreen> {
         _errorMessage = 'Error loading events: ${e.toString()}';
         _events = [];
         _groupedEvents = {};
+        _currentEvents = [];
+        _groupedCurrentEvents = {};
       });
     }
   }
@@ -362,9 +446,14 @@ class _EventsScreenState extends State<EventsScreen> {
         }
       }
 
+      final currentEvents = _filterCurrentEvents(filteredEvents);
+      final groupedAll = _groupEventsByWeek(filteredEvents);
+      final groupedCurrent = _groupEventsByWeek(currentEvents);
       setState(() {
         _events = filteredEvents;
-        _groupedEvents = _groupEventsByWeek(filteredEvents);
+        _currentEvents = currentEvents;
+        _groupedEvents = groupedAll;
+        _groupedCurrentEvents = groupedCurrent;
         _isLoading = false;
         if (filteredEvents.isEmpty) {
           final searchTerm = query.trim().isEmpty ? 'recent events' : '"$query"';
@@ -379,6 +468,8 @@ class _EventsScreenState extends State<EventsScreen> {
         _errorMessage = 'Error searching events: ${e.toString()}';
         _events = [];
         _groupedEvents = {};
+        _currentEvents = [];
+        _groupedCurrentEvents = {};
       });
     }
   }
@@ -567,6 +658,10 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Widget _buildEventsList() {
+    final isCurrentTab = _selectedEventsTabIndex == 0;
+    final groupedEvents = isCurrentTab ? _groupedCurrentEvents : _groupedEvents;
+    final events = isCurrentTab ? _currentEvents : _events;
+
     if (_errorMessage.isNotEmpty) {
       return Padding(
         padding: const EdgeInsets.all(AppConstants.spacingM),
@@ -641,12 +736,12 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
     if (!_hasSearched || (_isLoading && _events.isEmpty)) {
-      return Expanded(
-        child: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-              // Enhanced loading indicator with animation
+      return Center(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -660,25 +755,25 @@ class _EventsScreenState extends State<EventsScreen> {
                   ),
                   Icon(
                     Icons.search,
-                color: AppConstants.vexIQOrange,
+                    color: AppConstants.vexIQOrange,
                     size: 32,
                   ),
                 ],
-          ),
-          const SizedBox(height: AppConstants.spacingL),
-          Text(
+              ),
+              const SizedBox(height: AppConstants.spacingL),
+              Text(
                 'Comprehensive Search in Progress',
                 style: AppConstants.headline6.copyWith(
-              color: Theme.of(context).textTheme.titleLarge?.color,
+                  color: Theme.of(context).textTheme.titleLarge?.color,
                   fontWeight: FontWeight.bold,
-            ),
-          ),
+                ),
+              ),
               const SizedBox(height: AppConstants.spacingS),
               Text(
                 'Searching through all events...',
                 style: AppConstants.bodyText1.copyWith(
                   color: ThemeUtils.getSecondaryTextColor(context),
-            ),
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppConstants.spacingS),
@@ -712,7 +807,6 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               ),
               const SizedBox(height: AppConstants.spacingL),
-              // Progress dots animation
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(3, (index) {
@@ -727,214 +821,79 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   );
                 }),
-          ),
-        ],
-          ),
-      ),
-    );
-  }
-
-    if (_events.isEmpty && !_isLoading) {
-      return Expanded(
-        child: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-                Icons.event_busy,
-            size: 64,
-                color: ThemeUtils.getVeryMutedTextColor(context),
-          ),
-          const SizedBox(height: AppConstants.spacingM),
-          Text(
-                'No Events Found',
-                style: AppConstants.headline6.copyWith(
-              color: ThemeUtils.getSecondaryTextColor(context),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingS),
-          Text(
-                'Try a different search term or check back later',
-            style: AppConstants.bodyText2.copyWith(
-              color: ThemeUtils.getSecondaryTextColor(context),
-            ),
-            textAlign: TextAlign.center,
-          ),
+              ),
             ],
           ),
         ),
       );
     }
 
-    return Expanded(
-      child: RefreshIndicator(
-        onRefresh: () => _loadRecentEvents(),
-        color: AppConstants.vexIQOrange,
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingM),
-          itemCount: _getTotalItemCount(),
-          itemBuilder: (context, index) {
-            final item = _getItemAtIndex(index);
-            if (item is String) {
-              // This is a week header
-              return _buildWeekHeader(item);
-            } else {
-              // This is an event
-              final event = item as Event;
-            return Card(
-              margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
-              child: InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EventDetailsScreen(event: event),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppConstants.spacingM),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Event name and location spanning full width
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                  event.name,
-                                  style: AppConstants.bodyText1.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    if (event.start != null || event.end != null)
-                                      Text(
-                                        DateUtilsUS.formatRange(event.start, event.end),
-                                        style: AppConstants.caption.copyWith(
-                                          color: ThemeUtils.getSecondaryTextColor(context),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                if (_getEventLocation(event).isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _getEventLocation(event),
-                                    style: AppConstants.caption.copyWith(
-                                      color: ThemeUtils.getSecondaryTextColor(context),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          // Event level badge (from API 'level')
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getEventTypeColorFromLevel((event.level.isNotEmpty ? event.level : _getEventTypeName(event.name))).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              event.level.isNotEmpty ? event.level : _getEventTypeLabel(event.name),
-                              style: AppConstants.caption.copyWith(
-                                color: _getEventTypeColorFromLevel(event.level.isNotEmpty ? event.level : _getEventTypeName(event.name)),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppConstants.spacingS),
-                      // Bottom row with favorite button and arrow
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Event type icon
-                          Row(
-                            children: [
-                              Icon(
-                                _getEventTypeIconFromLevel(event.level.isNotEmpty ? event.level : _getEventTypeName(event.name)),
-                                size: 16,
-                                color: _getEventTypeColorFromLevel(event.level.isNotEmpty ? event.level : _getEventTypeName(event.name)),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                event.level.isNotEmpty ? event.level : _getEventTypeName(event.name),
-                                style: AppConstants.caption.copyWith(
-                                  color: ThemeUtils.getSecondaryTextColor(context),
-                                ),
-                              ),
-                            ],
-                          ),
-                          // Favorite button and arrow
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Consumer<UserSettings>(
-                                builder: (context, settings, child) {
-                                  final isFavorite = settings.isFavoriteEvent(event.sku);
-                                  return IconButton(
-                                    icon: Icon(
-                                      isFavorite ? Icons.favorite : Icons.favorite_border,
-                                      color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
-                                      size: 20,
-                                    ),
-                                    onPressed: () async {
-                                      if (isFavorite) {
-                                        await settings.removeFavoriteEvent(event.sku);
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('${event.name} removed from favorites')),
-                                          );
-                                        }
-                                      } else {
-                                        await settings.addFavoriteEvent(event.sku);
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('${event.name} added to favorites')),
-                                          );
-                                        }
-                                      }
-                                    },
-                                  );
-                                },
-                              ),
-                              Icon(
-                                Icons.chevron_right,
-                                color: ThemeUtils.getSecondaryTextColor(context),
-                                size: 20,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
+    final totalItems = _getTotalItemCount(groupedEvents);
+    final hasEvents = totalItems > 0;
+
+    return RefreshIndicator(
+      onRefresh: () => _loadRecentEvents(),
+      color: AppConstants.vexIQOrange,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingM),
+        itemCount: 1 + (hasEvents ? totalItems : 1),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: AppConstants.spacingS),
+                _buildEventsTabSwitcher(),
+                const SizedBox(height: AppConstants.spacingS),
+                if (_isLoading) const LinearProgressIndicator(minHeight: 2),
+                if (_isLoading) const SizedBox(height: AppConstants.spacingS),
+              ],
+            );
+          }
+          if (!hasEvents) {
+            final message = isCurrentTab
+                ? 'No events in the next two weeks.'
+                : 'No events found.';
+            final subtitle = isCurrentTab && _events.isNotEmpty
+                ? 'View the All tab to see upcoming events beyond two weeks.'
+                : 'Try a different search term or check back later.';
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingXL),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.event_busy,
+                    size: 64,
+                    color: ThemeUtils.getVeryMutedTextColor(context),
                   ),
-                ),
+                  const SizedBox(height: AppConstants.spacingM),
+                  Text(
+                    message,
+                    style: AppConstants.headline6.copyWith(
+                      color: ThemeUtils.getSecondaryTextColor(context),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppConstants.spacingS),
+                  Text(
+                    subtitle,
+                    style: AppConstants.bodyText2.copyWith(
+                      color: ThemeUtils.getSecondaryTextColor(context),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             );
-            }
-          },
-        ),
+          }
+          final item = _getItemAtIndex(index - 1, groupedEvents);
+          if (item is String) {
+            return _buildWeekHeader(item, groupedEvents);
+          } else {
+            final event = item as Event;
+            return _buildEventCard(event);
+          }
+        },
       ),
     );
   }
@@ -1108,25 +1067,26 @@ class _EventsScreenState extends State<EventsScreen> {
 
   void _refreshGrouping() {
     // Refresh grouping when sort order changes
-                setState(() {
+    setState(() {
       _groupedEvents = _groupEventsByWeek(_events);
+      _groupedCurrentEvents = _groupEventsByWeek(_currentEvents);
     });
   }
   
-  int _getTotalItemCount() {
+  int _getTotalItemCount(Map<String, List<Event>> groupedEvents) {
     int count = 0;
-    for (final week in _groupedEvents.keys) {
+    for (final week in groupedEvents.keys) {
       count += 1; // Week header
       if (!_collapsedWeeks.contains(week)) {
-        count += _groupedEvents[week]!.length; // Events in week
+        count += groupedEvents[week]!.length; // Events in week
       }
     }
     return count;
   }
   
-  dynamic _getItemAtIndex(int index) {
+  dynamic _getItemAtIndex(int index, Map<String, List<Event>> groupedEvents) {
     int currentIndex = 0;
-    final weeks = _groupedEvents.keys.toList()..sort();
+    final weeks = groupedEvents.keys.toList()..sort();
     final orderedWeeks = _sortEarliestFirst ? weeks : weeks.reversed.toList();
     for (final week in orderedWeeks) {
       if (currentIndex == index) {
@@ -1135,7 +1095,7 @@ class _EventsScreenState extends State<EventsScreen> {
       currentIndex++;
       
       if (!_collapsedWeeks.contains(week)) {
-        final eventsInWeek = _groupedEvents[week]!;
+        final eventsInWeek = groupedEvents[week]!;
         if (index < currentIndex + eventsInWeek.length) {
           return eventsInWeek[index - currentIndex]; // Event
         }
@@ -1145,8 +1105,8 @@ class _EventsScreenState extends State<EventsScreen> {
     return null;
   }
   
-  Widget _buildWeekHeader(String weekEnding) {
-    final eventCount = _groupedEvents[weekEnding]!.length;
+  Widget _buildWeekHeader(String weekEnding, Map<String, List<Event>> groupedEvents) {
+    final eventCount = groupedEvents[weekEnding]!.length;
     final isCollapsed = _collapsedWeeks.contains(weekEnding);
     return InkWell(
       onTap: () {
@@ -1193,64 +1153,249 @@ class _EventsScreenState extends State<EventsScreen> {
   }
   
   Color _getEventTypeColorFromLevel(String level) {
-    final name = level.toLowerCase();
-    if (name == 'world') {
-      return AppConstants.vexIQRed;
-    } else if (name == 'national') {
-      return const Color(0xFF9C27B0); // Purple
-    } else if (name == 'state') {
-      return AppConstants.vexIQBlue;
-    } else if (name == 'signature') {
-      return AppConstants.vexIQGreen;
-    } else if (name == 'other') {
-      return AppConstants.vexIQOrange;
-    } else {
-      // Fallback for old logic
-    if (name.contains('championship') || name.contains('worlds')) {
-      return AppConstants.vexIQRed;
-      } else if (name.contains('signature') || name.contains('regional') || name.contains('state')) {
-      return AppConstants.vexIQBlue;
-    } else {
+    final normalized = ApiConfig.normalizeApiEventLevel(level);
+    switch (normalized) {
+      case 'World Championship':
+        return AppConstants.vexIQRed;
+      case 'National Championships':
+        return const Color(0xFF9C27B0);
+      case 'Regional Championships':
+        return AppConstants.vexIQBlue;
+      case 'Signature Events':
+        return AppConstants.vexIQGreen;
+      default:
         return AppConstants.vexIQOrange;
-      }
     }
   }
 
   IconData _getEventTypeIconFromLevel(String level) {
-    final name = level.toLowerCase();
-    if (name.contains('championship') || name.contains('worlds')) {
+    final normalized = ApiConfig.normalizeApiEventLevel(level);
+    switch (normalized) {
+      case 'World Championship':
+      case 'National Championships':
         return Icons.emoji_events;
-    } else if (name.contains('signature') || name.contains('regional') || name.contains('state')) {
-      return Icons.star;
-    } else {
+      case 'Regional Championships':
+      case 'Signature Events':
+        return Icons.star;
+      default:
         return Icons.event;
     }
   }
-  
-  String _getEventTypeLabel(String eventName) {
-    final name = eventName.toLowerCase();
-    if (name.contains('middle school') || name.contains('ms')) {
-      return 'MS';
-    } else if (name.contains('elementary') || name.contains('es')) {
-      return 'ES';
-    } else {
-      return 'Blended';
-    }
+
+  Widget _buildEventCard(Event event) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventDetailsScreen(event: event),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                event.name,
+                                style: AppConstants.bodyText1.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (event.start != null || event.end != null)
+                              Text(
+                                DateUtilsUS.formatRange(event.start, event.end),
+                                style: AppConstants.caption.copyWith(
+                                  color: ThemeUtils.getSecondaryTextColor(context),
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (_getEventLocation(event).isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _getEventLocation(event),
+                            style: AppConstants.caption.copyWith(
+                              color: ThemeUtils.getSecondaryTextColor(context),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _getEventLevelLabel(event),
+                      style: AppConstants.caption.copyWith(
+                        color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacingS),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _getEventTypeIconFromLevel(_getEventLevelLabel(event)),
+                        size: 16,
+                        color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _getEventLevelLabel(event),
+                        style: AppConstants.caption.copyWith(
+                          color: ThemeUtils.getSecondaryTextColor(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Consumer<UserSettings>(
+                        builder: (context, settings, child) {
+                          final isFavorite = settings.isFavoriteEvent(event.sku);
+                          return IconButton(
+                            icon: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                              size: 20,
+                            ),
+                            onPressed: () async {
+                              if (isFavorite) {
+                                await settings.removeFavoriteEvent(event.sku);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('${event.name} removed from favorites')),
+                                  );
+                                }
+                              } else {
+                                await settings.addFavoriteEvent(event.sku);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('${event.name} added to favorites')),
+                                  );
+                                }
+                              }
+                            },
+                          );
+                        },
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: ThemeUtils.getSecondaryTextColor(context),
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
-  
-  String _getEventTypeName(String eventName) {
-    final name = eventName.toLowerCase();
-    if (name.contains('championship') || name.contains('worlds')) {
-      return 'Championship';
-    } else if (name.contains('signature')) {
-      return 'Signature';
-    } else if (name.contains('regional') || name.contains('state')) {
-      return 'Regional';
-    } else if (name.contains('school')) {
-      return 'School-Only';
-    } else {
-      return 'Local';
-    }
+
+  Widget _buildEventsTabSwitcher() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingM),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: ThemeUtils.getSecondaryTextColor(context).withOpacity(0.2)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: List.generate(2, (index) {
+            final selected = _selectedEventsTabIndex == index;
+            final isCurrent = index == 0;
+            final count = isCurrent ? _currentEvents.length : _events.length;
+            final borderRadius = index == 0
+                ? const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    bottomLeft: Radius.circular(12),
+                  )
+                : const BorderRadius.only(
+                    topRight: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                  );
+            return Expanded(
+              child: InkWell(
+                borderRadius: borderRadius,
+                onTap: () {
+                  if (_selectedEventsTabIndex != index) {
+                    setState(() {
+                      _selectedEventsTabIndex = index;
+                    });
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected ? AppConstants.vexIQBlue.withOpacity(0.1) : Colors.transparent,
+                    borderRadius: borderRadius,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isCurrent ? 'Current' : 'All',
+                        style: AppConstants.bodyText2.copyWith(
+                          fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                          color: selected ? AppConstants.vexIQBlue : ThemeUtils.getSecondaryTextColor(context),
+                        ),
+                      ),
+                      Text(
+                        '$count events',
+                        style: AppConstants.caption.copyWith(
+                          color: selected
+                              ? AppConstants.vexIQBlue
+                              : ThemeUtils.getSecondaryTextColor(context).withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   String _getEventLocation(Event event) {

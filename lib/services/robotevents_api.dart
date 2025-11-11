@@ -481,13 +481,17 @@ class RobotEventsAPI {
     print('Level Class: $levelClass');
     print('Page: $page');
     
+    final apiLevels = levels != null && levels.isNotEmpty
+        ? ApiConfig.mapDisplayLevelsToApi(levels)
+        : levels;
+
     // If we have a search query, use the enhanced scraping method
     if (query != null && query.trim().isNotEmpty) {
       return await searchEventsWithScraping(
         query: query,
         seasonId: seasonId,
         levelClass: levelClass,
-        levels: levels,
+        levels: apiLevels,
         page: page,
         fromDate: fromDate,
         toDate: toDate,
@@ -499,7 +503,7 @@ class RobotEventsAPI {
       query: query,
       seasonId: seasonId,
       levelClass: levelClass,
-      levels: levels,
+      levels: apiLevels,
       page: page,
     );
     

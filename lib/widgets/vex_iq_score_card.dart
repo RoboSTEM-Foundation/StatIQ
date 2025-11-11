@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
 import '../models/team.dart';
 import '../services/vex_iq_scoring.dart';
@@ -27,6 +29,16 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  static const Duration _cacheTtl = Duration(days: 2);
+
+  String _cacheKey() {
+    final season = widget.seasonId?.toString() ?? 'current';
+    final identifier = widget.team.number.isNotEmpty
+        ? widget.team.number
+        : widget.team.id.toString();
+    return 'statiq_score_${identifier}_$season';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +63,34 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
     });
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = _cacheKey();
+      final cachedString = prefs.getString(cacheKey);
+      if (cachedString != null) {
+        try {
+          final cachedData = jsonDecode(cachedString) as Map<String, dynamic>;
+          final updatedAtString = cachedData['updatedAt']?.toString();
+          final updatedAt = updatedAtString != null ? DateTime.tryParse(updatedAtString) : null;
+          final cachedBreakdown = cachedData['breakdown'];
+          final needsBreakdown = widget.showBreakdown && cachedBreakdown == null;
+          if (updatedAt != null && DateTime.now().difference(updatedAt) < _cacheTtl && !needsBreakdown) {
+            final cachedScore = cachedData['score']?.toString();
+            if (cachedScore != null && mounted) {
+              setState(() {
+                _vexIQScore = cachedScore;
+                _scoreBreakdown = cachedBreakdown is Map<String, dynamic>
+                    ? Map<String, dynamic>.from(cachedBreakdown)
+                    : null;
+                _isLoading = false;
+              });
+              return;
+            }
+          }
+        } catch (e) {
+          print('Error parsing statIQ score cache: $e');
+        }
+      }
+
       // Get comprehensive team data for scoring
       final teamData = await RobotEventsAPI.getComprehensiveTeamData(
         team: widget.team,
@@ -87,6 +127,14 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
           _isLoading = false;
         });
       }
+
+      // Cache result for future loads
+      final cachePayload = <String, dynamic>{
+        'score': score,
+        'breakdown': breakdown,
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      await prefs.setString(cacheKey, jsonEncode(cachePayload));
     } catch (e) {
       print('Error calculating statIQ Score: $e');
       
