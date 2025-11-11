@@ -214,7 +214,7 @@ class ApiConfig {
     }
     
     if (levels != null && levels.isNotEmpty) {
-      params['level[]'] = levels;
+      params['level[]'] = mapDisplayLevelsToApi(levels);
     }
     
     print('🔍 Final event search params: $params');
@@ -303,12 +303,60 @@ class ApiConfig {
     'Middle School',
   ];
   
-  // Available event levels for filtering (ordered as requested: All -> Regional Championships -> National Championships -> Signature Events -> Worlds)
+  // Available event levels for filtering (matches RobotEvents terminology)
   static const List<String> availableEventLevels = [
-    'Other',           // All (catch-all for other event types)
-    'State',           // Regional Championships (renamed from "State")
-    'National',        // National Championships
-    'Signature',       // Signature Events
-    'World',           // Worlds
+    'Local',
+    'Regional Championships',
+    'National Championships',
+    'Signature Events',
+    'World Championship',
   ];
+
+  // Mapping between display labels and API values
+  static const Map<String, String> eventLevelApiValues = {
+    'Local': 'other',
+    'Regional Championships': 'state',
+    'National Championships': 'national',
+    'Signature Events': 'signature',
+    'World Championship': 'world',
+  };
+
+  static const Map<String, String> apiEventLevelDisplay = {
+    'other': 'Local',
+    'local': 'Local',
+    'state': 'Regional Championships',
+    'regional': 'Regional Championships',
+    'regional championship': 'Regional Championships',
+    'national': 'National Championships',
+    'national championship': 'National Championships',
+    'signature': 'Signature Events',
+    'world': 'World Championship',
+    'world championship': 'World Championship',
+  };
+
+  static List<String> mapDisplayLevelsToApi(List<String> levels) {
+    return levels
+        .map((level) => eventLevelApiValues[level] ?? level.toLowerCase())
+        .toList();
+  }
+
+  static String normalizeApiEventLevel(String level) {
+    final value = level.toLowerCase().trim();
+    if (apiEventLevelDisplay.containsKey(value)) {
+      return apiEventLevelDisplay[value]!;
+    }
+    if (value.contains('world')) {
+      return 'World Championship';
+    }
+    if (value.contains('signature')) {
+      return 'Signature Events';
+    }
+    if (value.contains('national')) {
+      return 'National Championships';
+    }
+    if (value.contains('regional') || value.contains('state')) {
+      return 'Regional Championships';
+    }
+    return 'Local';
+  }
 } 

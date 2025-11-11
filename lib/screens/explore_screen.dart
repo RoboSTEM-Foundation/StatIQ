@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +12,7 @@ import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -25,6 +27,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
   String _skillsGradeLevel = 'Middle School';
   bool _isLoadingEvents = true;
   List<Event> _signatureEvents = [];
+
+  static const Duration _skillsCacheTtl = Duration(days: 2);
+
+  String _skillsCacheKey(String gradeLevel) {
+    return 'world_skills_${gradeLevel.replaceAll(' ', '_').toLowerCase()}';
+  }
 
   @override
   void initState() {
@@ -44,18 +52,52 @@ class _ExploreScreenState extends State<ExploreScreen> {
     });
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = _skillsCacheKey(_skillsGradeLevel);
+      final cachedString = prefs.getString(cacheKey);
+      if (cachedString != null) {
+        try {
+          final cachedData = jsonDecode(cachedString) as Map<String, dynamic>;
+          final updatedAtString = cachedData['updatedAt']?.toString();
+          final updatedAt = updatedAtString != null ? DateTime.tryParse(updatedAtString) : null;
+          final cachedRankings = cachedData['data'];
+          if (updatedAt != null &&
+              DateTime.now().difference(updatedAt) < _skillsCacheTtl &&
+              cachedRankings is List<dynamic>) {
+            if (mounted) {
+              setState(() {
+                _skillsRankings = List<dynamic>.from(cachedRankings);
+                _isLoadingSkills = false;
+              });
+            }
+            return;
+          }
+        } catch (e) {
+          print('Error parsing skills cache: $e');
+        }
+      }
+
       final rankings = await RobotEventsAPI.getWorldSkillsRankings(
         gradeLevel: _skillsGradeLevel,
       );
-      setState(() {
-        _skillsRankings = rankings;
-      });
+      if (mounted) {
+        setState(() {
+          _skillsRankings = rankings;
+        });
+      }
+      final cachePayload = {
+        'data': rankings,
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      await prefs.setString(cacheKey, jsonEncode(cachePayload));
     } catch (e) {
       print('Error loading world skills rankings: $e');
     } finally {
-      setState(() {
-        _isLoadingSkills = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingSkills = false;
+        });
+      }
     }
   }
 

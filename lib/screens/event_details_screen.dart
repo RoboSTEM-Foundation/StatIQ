@@ -361,18 +361,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   Widget _buildInfoTab() {
+    final hasLocation = widget.event.city.isNotEmpty ||
+        widget.event.region.isNotEmpty ||
+        widget.event.country.isNotEmpty;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppConstants.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildEventInfoCard(),
-          const SizedBox(height: AppConstants.spacingM),
-          _buildLocationCard(),
-          const SizedBox(height: AppConstants.spacingM),
-          _buildDivisionsCard(),
-          const SizedBox(height: AppConstants.spacingM),
-          _buildQuickStatsCard(),
+          if (hasLocation) ...[
+            const SizedBox(height: AppConstants.spacingM),
+            _buildLocationCard(),
+          ],
           const SizedBox(height: AppConstants.spacingM),
           _buildStatIQScoreCard(),
         ],
@@ -1411,13 +1413,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             padding: const EdgeInsets.all(AppConstants.spacingM),
               margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
             decoration: BoxDecoration(
-                color: groupName.contains('Upcoming') 
-                    ? AppConstants.vexIQGreen.withOpacity(0.1)
-                    : groupName.contains('Past')
-                        ? AppConstants.vexIQOrange.withOpacity(0.1)
-                        : ThemeUtils.getVeryMutedTextColor(context, opacity: 0.1),
-                borderRadius: BorderRadius.circular(8),
+              color: groupName.contains('Upcoming')
+                  ? AppConstants.vexIQGreen.withOpacity(0.06)
+                  : groupName.contains('Past')
+                      ? AppConstants.vexIQOrange.withOpacity(0.06)
+                      : ThemeUtils.getVeryMutedTextColor(context, opacity: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: ThemeUtils.getSecondaryTextColor(context).withOpacity(0.08),
               ),
+            ),
               child: Row(
                 children: [
                   Icon(
@@ -1466,8 +1471,46 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     );
   }
 
+  String _formatMatchDisplayName(dynamic match) {
+    final matchName = match['name']?.toString() ?? '';
+    final round = match['round']?.toString().toLowerCase() ?? '';
+    final instance = match['instance']?.toString() ?? '';
+    final matchNum = match['matchnum']?.toString() ?? '';
+
+    String number = matchNum.isNotEmpty ? matchNum : instance;
+    if (number.isEmpty) {
+      final digitMatch = RegExp(r'\d+').firstMatch(matchName);
+      if (digitMatch != null) {
+        number = digitMatch.group(0)!;
+      }
+    }
+
+    String prefix = '';
+    final nameLower = matchName.toLowerCase();
+    if (round.contains('qualification') || nameLower.contains('qualification') || nameLower.contains('qualifier')) {
+      prefix = 'Q';
+    } else if (round.contains('semifinal')) {
+      prefix = 'SF';
+    } else if (round.contains('quarter')) {
+      prefix = 'QF';
+    } else if (round.contains('final')) {
+      prefix = 'F';
+    } else if (round.contains('practice') || nameLower.contains('practice')) {
+      return number.isNotEmpty ? 'Practice $number' : 'Practice';
+    }
+
+    if (prefix.isNotEmpty) {
+      return number.isNotEmpty ? '$prefix $number' : prefix;
+    }
+
+    if (matchName.isNotEmpty) {
+      return matchName;
+    }
+
+    return number.isNotEmpty ? 'Match $number' : 'Match';
+  }
+
   Widget _buildTournamentMatchCard(dynamic match) {
-    final matchName = match['name']?.toString() ?? 'Unknown Match';
     final scheduledTime = match['scheduled']?.toString() ?? '';
     final startedTime = match['started']?.toString() ?? '';
     final finishedTime = match['finished']?.toString() ?? '';
@@ -1523,32 +1566,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       timeType = 'unknown';
     }
 
-    // Format match name with readable terms
-    String displayName = matchName;
-    if (displayName.contains('Qualifier')) {
-      final matchNumber = matchnum.isNotEmpty ? matchnum : instance.isNotEmpty ? instance : '';
-      displayName = 'Qualifier $matchNumber';
-    } else if (displayName.contains('Practice')) {
-      final matchNumber = matchnum.isNotEmpty ? matchnum : instance.isNotEmpty ? instance : '';
-      displayName = 'Practice $matchNumber';
-    } else if (displayName.contains('Final')) {
-      final matchNumber = matchnum.isNotEmpty ? matchnum : instance.isNotEmpty ? instance : '';
-      displayName = 'Final $matchNumber';
-    } else {
-      // Use instance and matchnum for other match types
-      if (instance.isNotEmpty && matchnum.isNotEmpty) {
-        displayName = 'Match $instance-$matchnum';
-      } else if (instance.isNotEmpty) {
-        displayName = 'Match $instance';
-      } else if (matchnum.isNotEmpty) {
-        displayName = 'Match $matchnum';
-      }
-    }
+    final displayName = _formatMatchDisplayName(match);
+
+    final defaultCardColor = Theme.of(context).colorScheme.surface;
+    final upcomingColor = AppConstants.vexIQGreen.withOpacity(0.08);
+    final pastColor = ThemeUtils.getVeryMutedTextColor(context, opacity: 0.05);
+    final cardColor = isUpcoming ? upcomingColor : isPast ? pastColor : defaultCardColor;
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
-      color: isUpcoming ? AppConstants.vexIQGreen.withOpacity(0.1) : 
-             isPast ? ThemeUtils.getVeryMutedTextColor(context, opacity: 0.1) : Theme.of(context).colorScheme.onPrimary,
+      color: cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+        side: BorderSide(
+          color: ThemeUtils.getSecondaryTextColor(context).withOpacity(isUpcoming ? 0.12 : 0.06),
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(AppConstants.spacingM),
             child: Row(
@@ -1627,9 +1660,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: isUpcoming ? AppConstants.vexIQGreen.withOpacity(0.1) :
-                                 isPast ? ThemeUtils.getVeryMutedTextColor(context, opacity: 0.1) :
-                                 AppConstants.vexIQOrange.withOpacity(0.1),
+                          color: isUpcoming
+                              ? AppConstants.vexIQGreen.withOpacity(0.08)
+                              : isPast
+                                  ? ThemeUtils.getVeryMutedTextColor(context, opacity: 0.08)
+                                  : AppConstants.vexIQOrange.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -3811,21 +3846,27 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         final awardOrder = award['order']?.toString() ?? '';
         // Awards have team data in teamWinners array
         final teamWinners = award['teamWinners'] as List<dynamic>? ?? [];
-        final teamData = teamWinners.isNotEmpty ? teamWinners[0]['team'] : null;
+        final winnerLabels = <String>[];
+        for (final winner in teamWinners) {
+          final winnerMap = winner is Map<String, dynamic> ? winner : null;
+          final teamData = winnerMap?['team'] ?? winnerMap;
+          if (teamData is Map<String, dynamic>) {
+            final number = teamData['number']?.toString() ??
+                teamData['name']?.toString() ??
+                teamData['team_number']?.toString();
+            if (number != null && number.isNotEmpty) {
+              winnerLabels.add(number.toUpperCase());
+            }
+          }
+        }
         
         // Debug: Print award data structure
         print('🔍 Award data: $award');
         print('🔍 Team winners: $teamWinners');
-        print('🔍 Team data in award: $teamData');
-        if (teamData is Map) {
-          print('🔍 Team data keys: ${teamData.keys.toList()}');
-        }
+        print('🔍 Winner labels: $winnerLabels');
         
-        final teamNumber = (teamData is Map) 
-            ? (teamData['name']?.toString() ?? 
-               teamData['number']?.toString() ?? 
-               teamData['team_number']?.toString() ?? 
-               'Unknown Team')
+        final teamNumber = winnerLabels.isNotEmpty
+            ? winnerLabels.join(' & ')
             : 'Unknown Team';
 
         return Card(
@@ -3867,6 +3908,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                           color: AppConstants.vexIQBlue,
                           fontWeight: FontWeight.w500,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
