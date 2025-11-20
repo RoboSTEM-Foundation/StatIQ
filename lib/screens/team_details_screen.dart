@@ -177,8 +177,8 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   Future<void> _loadCompetitionData() async {
     try {
       if (_currentTeam == null) {
-        if (mounted) {
-          setState(() {
+      if (mounted) {
+        setState(() {
             _isLoadingCompetitionData = false;
           });
         }

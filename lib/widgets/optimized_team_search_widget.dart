@@ -410,7 +410,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
     }
 
     print('🔍 Empty state check: _currentResults.isEmpty=${_currentResults.isEmpty}, _searchController.text.isNotEmpty=${_searchController.text.isNotEmpty}, searchText="${_searchController.text}"');
-    
+
     if (_currentResults.isEmpty && _searchController.text.isNotEmpty) {
       print('🔍 Showing Check Again button for query: "${_searchController.text}"');
       return _buildEmptyState(
@@ -484,45 +484,45 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
             final teamTier = SpecialTeamsService.instance.getTeamTier(team.number);
             final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
             final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
-            
-            return Card(
-              margin: const EdgeInsets.symmetric(
-                vertical: AppConstants.spacingS,
-              ),
-              elevation: AppConstants.elevationS,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+
+        return Card(
+          margin: const EdgeInsets.symmetric(
+            vertical: AppConstants.spacingS,
+          ),
+          elevation: AppConstants.elevationS,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
                 side: (isMyTeam || tierColor != null) ? BorderSide(
                   color: tierColor ?? AppConstants.vexIQBlue,
                   width: 2,
                 ) : BorderSide.none,
-              ),
+          ),
               color: (isMyTeam || tierColor != null) 
                   ? (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1) 
                   : null,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-                onTap: () => _onTeamTap(teamData),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppConstants.spacingM),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+            onTap: () => _onTeamTap(teamData),
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.spacingM),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
+                      CircleAvatar(
                             backgroundColor: (isMyTeam || tierColor != null) 
                                 ? (tierColor ?? AppConstants.vexIQBlue) 
                                 : AppConstants.vexIQOrange,
-                            radius: 24,
-                            child: Text(
-                              team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
-                              style: AppConstants.bodyText1.copyWith(
-                                color: Theme.of(context).colorScheme.onPrimary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                        radius: 24,
+                        child: Text(
+                          team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
+                          style: AppConstants.bodyText1.copyWith(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
                           ),
+                        ),
+                      ),
                       const SizedBox(width: AppConstants.spacingM),
                       Flexible(
                         child: Column(
@@ -556,38 +556,38 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
                         ),
                       ),
                       if (!widget.isSelectionMode) ...[
-                        Consumer<UserSettings>(
-                          builder: (context, settings, child) {
-                            final isFavorite = settings.isFavoriteTeam(team.number);
-                            return IconButton(
-                              icon: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
-                              ),
-                              onPressed: () async {
-                                if (isFavorite) {
-                                  await settings.removeFavoriteTeam(team.number);
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('${team.number} removed from favorites')),
-                                    );
-                                  }
-                                } else {
-                                  await settings.addFavoriteTeam(team.number);
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('${team.number} added to favorites')),
-                                    );
-                                  }
+                      Consumer<UserSettings>(
+                        builder: (context, settings, child) {
+                          final isFavorite = settings.isFavoriteTeam(team.number);
+                          return IconButton(
+                            icon: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                            ),
+                            onPressed: () async {
+                              if (isFavorite) {
+                                await settings.removeFavoriteTeam(team.number);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('${team.number} removed from favorites')),
+                                  );
                                 }
-                              },
-                            );
-                          },
-                        ),
-                        Icon(
-                          Icons.chevron_right,
-                          color: ThemeUtils.getSecondaryTextColor(context),
-                        ),
+                              } else {
+                                await settings.addFavoriteTeam(team.number);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('${team.number} added to favorites')),
+                                  );
+                                }
+                              }
+                            },
+                          );
+                        },
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: ThemeUtils.getSecondaryTextColor(context),
+                      ),
                       ],
                     ],
                   ),

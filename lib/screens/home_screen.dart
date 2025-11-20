@@ -271,13 +271,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                     ),
                   ] else ...[
-                    Text(
+                  Text(
                       'Loading favorite events...',
-                      style: AppConstants.bodyText2.copyWith(
-                        color: ThemeUtils.getSecondaryTextColor(context),
-                      ),
-                      textAlign: TextAlign.center,
+                    style: AppConstants.bodyText2.copyWith(
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
+                    textAlign: TextAlign.center,
+                  ),
                   ],
                   const SizedBox(height: AppConstants.spacingM),
                   ElevatedButton(
@@ -358,54 +358,54 @@ class _HomeScreenState extends State<HomeScreen> {
         final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
         final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
         
-        return Card(
-          margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
-          elevation: AppConstants.elevationS,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
+      elevation: AppConstants.elevationS,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
             side: (isMyTeam || tierColor != null) ? BorderSide(
               color: tierColor ?? AppConstants.vexIQBlue,
               width: 2,
             ) : BorderSide.none,
-          ),
+      ),
           color: (isMyTeam || tierColor != null) 
               ? (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1) 
               : null,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-            onTap: () => _showTeamDetails(team),
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.spacingM),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+        onTap: () => _showTeamDetails(team),
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
+                  CircleAvatar(
                         backgroundColor: (isMyTeam || tierColor != null) 
                             ? (tierColor ?? AppConstants.vexIQBlue) 
                             : AppConstants.vexIQOrange,
-                        radius: 24,
-                        child: Text(
-                          team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
-                          style: AppConstants.bodyText1.copyWith(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    radius: 24,
+                    child: Text(
+                      team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
+                      style: AppConstants.bodyText1.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                  ),
                   const SizedBox(width: AppConstants.spacingM),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          children: [
-                            Text(
-                              team.number,
-                              style: AppConstants.headline6.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                      children: [
+                        Text(
+                          team.number,
+                          style: AppConstants.headline6.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                             ),
                             if (teamTier != null) ...[
                               const SizedBox(width: 6),

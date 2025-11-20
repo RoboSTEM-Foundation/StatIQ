@@ -2395,7 +2395,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   // Results tab implementation (like Elapse app)
   Widget _buildCombinedResultsTab() {
     return DefaultTabController(
-      length: 2,
+      length: 4,
       child: Column(
             children: [
           // Sub-tabs for Rankings and Awards (removed Skills to avoid duplication)

@@ -241,10 +241,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           children: [
             Expanded(
               child: Text(
-                team.name.isNotEmpty ? team.name : 'Team ${team.number}',
-                style: AppConstants.headline6.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+          team.name.isNotEmpty ? team.name : 'Team ${team.number}',
+          style: AppConstants.headline6.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
               ),
             ),
             if (teamTier != null) ...[

@@ -54,8 +54,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
                     showSyncStatus: true,
                   )
                 : const SimpleTeamSearchWidget(
-                    hintText: 'Search teams by number, name, or location (Ex: China, 839a, Magikid)',
-                    showSyncStatus: true,
+        hintText: 'Search teams by number, name, or location (Ex: China, 839a, Magikid)',
+        showSyncStatus: true,
                     useAPI: true,
                   ),
           ),
