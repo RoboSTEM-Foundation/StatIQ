@@ -39,6 +39,28 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload favorites when UserSettings changes (e.g., when myTeam changes)
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+    userSettings.addListener(_onUserSettingsChanged);
+  }
+
+  @override
+  void dispose() {
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+    userSettings.removeListener(_onUserSettingsChanged);
+    super.dispose();
+  }
+
+  void _onUserSettingsChanged() {
+    // Reload favorites when settings change (especially myTeam)
+    if (mounted) {
+      _loadFavoriteTeams();
+    }
+  }
+
   Future<void> _checkFirstLaunch() async {
     final prefs = await SharedPreferences.getInstance();
     final isFirstLaunch = prefs.getBool('first_launch') ?? true;
@@ -239,6 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Your Events',
             style: AppConstants.headline5.copyWith(
               fontWeight: FontWeight.bold,
+              color: ThemeUtils.getTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingM),
@@ -257,6 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     '${favoriteEventSkus.length} Favorite Event${favoriteEventSkus.length == 1 ? '' : 's'}',
                     style: AppConstants.headline6.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: ThemeUtils.getTextColor(context),
                     ),
                   ),
                   const SizedBox(height: AppConstants.spacingM),
@@ -302,7 +326,10 @@ class _HomeScreenState extends State<HomeScreen> {
         leading: const Icon(Icons.event, color: AppConstants.vexIQGreen),
         title: Text(
           event.name,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: ThemeUtils.getTextColor(context),
+          ),
         ),
         subtitle: Text(
           event.location,
@@ -333,6 +360,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Your Teams',
             style: AppConstants.headline5.copyWith(
               fontWeight: FontWeight.bold,
+              color: ThemeUtils.getTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingM),
@@ -405,6 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           team.number,
                           style: AppConstants.headline6.copyWith(
                             fontWeight: FontWeight.bold,
+                            color: ThemeUtils.getTextColor(context),
                           ),
                             ),
                             if (teamTier != null) ...[
@@ -532,6 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Quick Actions',
             style: AppConstants.headline6.copyWith(
               fontWeight: FontWeight.bold,
+              color: ThemeUtils.getTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingM),
@@ -586,6 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title,
               style: AppConstants.bodyText2.copyWith(
                 fontWeight: FontWeight.bold,
+                color: ThemeUtils.getTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),

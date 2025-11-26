@@ -21,15 +21,8 @@ void main() async {
   // Initialize services
   await _initializeServices();
   
-  // Set system UI overlay style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.white,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
+  // System UI overlay style is handled by theme in MaterialApp
+  // No need to set it here as it would hardcode light mode colors
   
   runApp(const TheCappedPinsApp());
 }
@@ -446,6 +439,10 @@ ThemeData _buildDarkTheme() {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
       ),
+    ),
+    listTileTheme: const ListTileThemeData(
+      textColor: Colors.white,
+      iconColor: Colors.white,
     ),
     scaffoldBackgroundColor: const Color(0xFF0F0F0F),
   );

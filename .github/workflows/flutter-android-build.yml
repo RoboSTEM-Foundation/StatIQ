@@ -76,3 +76,4 @@ jobs:
           echo "📱 APK size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
           echo "📦 AAB size: $(du -h build/app/outputs/bundle/release/app-release.aab | cut -f1)"
 
+

@@ -364,7 +364,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           backgroundColor: AppConstants.vexIQBlue,
           child: Icon(
             Icons.event,
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
           ),
         ),
         title: Text(

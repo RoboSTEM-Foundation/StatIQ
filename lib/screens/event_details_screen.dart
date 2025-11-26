@@ -1118,7 +1118,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             decoration: BoxDecoration(
             color: AppConstants.vexIQGreen.withOpacity(0.1),
             border: Border(
-              bottom: BorderSide(color: Colors.grey[300]!, width: 1),
+              bottom: BorderSide(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[700]!
+                    : Colors.grey[300]!,
+                width: 1,
+              ),
             ),
           ),
           child: Consumer<UserSettings>(
@@ -2836,7 +2841,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             Container(
                 padding: const EdgeInsets.all(AppConstants.spacingS),
               decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]!.withOpacity(0.3)
+                      : Colors.grey[50],
                 borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
               ),
                 child: Column(
@@ -3324,7 +3331,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               Container(
                 padding: const EdgeInsets.all(AppConstants.spacingS),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]!.withOpacity(0.3)
+                      : Colors.grey[50],
                   borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
                 ),
                 child: Row(
@@ -3844,30 +3853,102 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                          award['award']?.toString() ?? 
                          'Unknown Award';
         final awardOrder = award['order']?.toString() ?? '';
-        // Awards have team data in teamWinners array
+        // Awards can have team data in multiple possible structures
         final teamWinners = award['teamWinners'] as List<dynamic>? ?? [];
+        final teams = award['teams'] as List<dynamic>? ?? []; // Alternative structure
         final winnerLabels = <String>[];
-        for (final winner in teamWinners) {
-          final winnerMap = winner is Map<String, dynamic> ? winner : null;
-          final teamData = winnerMap?['team'] ?? winnerMap;
+        
+        // Helper function to extract team info from various structures
+        String? extractTeamNumber(dynamic teamData) {
           if (teamData is Map<String, dynamic>) {
-            final number = teamData['number']?.toString() ??
-                teamData['name']?.toString() ??
-                teamData['team_number']?.toString();
-            if (number != null && number.isNotEmpty) {
-              winnerLabels.add(number.toUpperCase());
+            return teamData['number']?.toString() ??
+                teamData['team_number']?.toString() ??
+                teamData['teamNumber']?.toString() ??
+                teamData['team']?.toString();
+          }
+          return null;
+        }
+        
+        String? extractTeamName(dynamic teamData) {
+          if (teamData is Map<String, dynamic>) {
+            return teamData['name']?.toString() ??
+                teamData['team_name']?.toString() ??
+                teamData['teamName']?.toString();
+          }
+          return null;
+        }
+        
+        // Try teamWinners array first
+        for (final winner in teamWinners) {
+          String? teamNumber;
+          String? teamName;
+          
+          if (winner is Map<String, dynamic>) {
+            // Structure 1: winner['team'] contains team data
+            final teamData = winner['team'];
+            if (teamData != null) {
+              teamNumber = extractTeamNumber(teamData);
+              teamName = extractTeamName(teamData);
             }
+            
+            // Structure 2: winner itself is team data
+            if (teamNumber == null) {
+              teamNumber = extractTeamNumber(winner);
+              teamName = extractTeamName(winner);
+            }
+          } else if (winner is String) {
+            // Structure 3: winner is just a team number string
+            teamNumber = winner;
+          }
+          
+          // Build display string
+          if (teamNumber != null && teamNumber.isNotEmpty) {
+            final displayText = teamName != null && teamName.isNotEmpty
+                ? '$teamNumber ($teamName)'
+                : teamNumber.toUpperCase();
+            winnerLabels.add(displayText);
+          }
+        }
+        
+        // Try teams array (alternative structure)
+        for (final team in teams) {
+          final teamNumber = extractTeamNumber(team);
+          final teamName = extractTeamName(team);
+          if (teamNumber != null && teamNumber.isNotEmpty) {
+            final displayText = teamName != null && teamName.isNotEmpty
+                ? '$teamNumber ($teamName)'
+                : teamNumber.toUpperCase();
+            if (!winnerLabels.contains(displayText)) {
+              winnerLabels.add(displayText);
+            }
+          }
+        }
+        
+        // Also check for individualWinners (for individual awards)
+        final individualWinners = award['individualWinners'] as List<dynamic>? ?? [];
+        for (final winner in individualWinners) {
+          if (winner is Map<String, dynamic>) {
+            final name = winner['name']?.toString() ?? 
+                winner['student']?.toString() ??
+                winner['studentName']?.toString();
+            if (name != null && name.isNotEmpty) {
+              winnerLabels.add(name);
+            }
+          } else if (winner is String && winner.isNotEmpty) {
+            winnerLabels.add(winner);
           }
         }
         
         // Debug: Print award data structure
         print('🔍 Award data: $award');
         print('🔍 Team winners: $teamWinners');
+        print('🔍 Teams: $teams');
+        print('🔍 Individual winners: $individualWinners');
         print('🔍 Winner labels: $winnerLabels');
         
-        final teamNumber = winnerLabels.isNotEmpty
+        final teamDisplay = winnerLabels.isNotEmpty
             ? winnerLabels.join(' & ')
-            : 'Unknown Team';
+            : 'No winner data available';
 
         return Card(
           margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
@@ -3903,12 +3984,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                         ),
                       ),
                       Text(
-                        teamNumber,
+                        teamDisplay,
                         style: AppConstants.bodyText2.copyWith(
                           color: AppConstants.vexIQBlue,
                           fontWeight: FontWeight.w500,
                         ),
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],

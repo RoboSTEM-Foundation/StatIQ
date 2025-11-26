@@ -50,7 +50,24 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _loadTeamData(    );
+  }
+
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging) {
+      // Reload matches and awards tabs when selected to ensure fresh data (no caching)
+      // Only reload if data is already loaded (to avoid double-loading on initial tab selection)
+      if (_tabController.index == 2 && !_isLoadingAwards) {
+        // Awards tab - reload awards
+        print('🔄 Reloading awards for tab selection');
+        _loadTeamAwards();
+      } else if (_tabController.index == 3 && !_isLoadingCompetitionData) {
+        // Matches tab - reload matches
+        print('🔄 Reloading matches for tab selection');
+        _loadCompetitionData();
+      }
+    }
   }
 
   String _getEventNameForMatch(Match match) {
@@ -93,6 +110,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -122,8 +140,9 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
       _currentTeam = widget.team;
     }
     
-    await _loadTeamEvents();
+    // Load all data in parallel for better performance
     await Future.wait([
+      _loadTeamEvents(),
       _loadTeamAwards(),
       _loadCompetitionData(),
     ]);
@@ -153,11 +172,20 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Future<void> _loadTeamAwards() async {
+    // Always fetch fresh awards data (no caching)
+    final teamId = _currentTeam?.id ?? widget.team.id;
+    print('📋 Loading awards for team ID: $teamId, season: $_selectedSeasonId');
+    
+    setState(() {
+      _isLoadingAwards = true;
+    });
+    
     try {
       final awards = await RobotEventsAPI.getTeamAwards(
-        teamId: _currentTeam?.id ?? widget.team.id,
+        teamId: teamId,
         seasonId: _selectedSeasonId,
       );
+      print('✅ Loaded ${awards.length} awards for team $teamId');
       if (mounted) {
         setState(() {
           _teamAwards = awards;
@@ -165,9 +193,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         });
       }
     } catch (e) {
-      print('Error loading team awards: $e');
+      print('❌ Error loading team awards: $e');
       if (mounted) {
         setState(() {
+          _teamAwards = []; // Clear on error
           _isLoadingAwards = false;
         });
       }
@@ -175,10 +204,20 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   }
 
   Future<void> _loadCompetitionData() async {
+    // Always fetch fresh matches data (no caching)
+    final teamId = _currentTeam?.id ?? widget.team.id;
+    print('🏆 Loading matches for team ID: $teamId, season: $_selectedSeasonId');
+    
+    setState(() {
+      _isLoadingCompetitionData = true;
+    });
+    
     try {
-      if (_currentTeam == null) {
-      if (mounted) {
-        setState(() {
+      if (_currentTeam == null && widget.team.id == 0) {
+        print('⚠️ No valid team ID available');
+        if (mounted) {
+          setState(() {
+            _teamMatches = [];
             _isLoadingCompetitionData = false;
           });
         }
@@ -186,11 +225,14 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
       }
 
       // Use the new direct team matches API (Bug Patch 3 requirement)
+      // Always fetch fresh data - no caching
       final matchesData = await RobotEventsAPI.getTeamMatches(
-        teamId: _currentTeam!.id,
+        teamId: teamId,
         seasonId: _selectedSeasonId,
         eventIds: widget.eventId != null ? [widget.eventId!] : null, // Filter by event if provided, null means all events
       );
+
+      print('📊 API returned ${matchesData.length} match records');
 
       final allMatches = <Match>[];
       for (final matchData in matchesData) {
@@ -198,9 +240,12 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           final match = Match.fromJson(matchData as Map<String, dynamic>);
           allMatches.add(match);
         } catch (e) {
-          print('Error parsing match data: $e');
+          print('❌ Error parsing match data: $e');
+          print('   Match data: $matchData');
         }
       }
+
+      print('✅ Parsed ${allMatches.length} matches successfully');
 
       // Sort matches by scheduled time (earliest first)
       allMatches.sort((a, b) {
@@ -211,8 +256,14 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
       });
 
       // Schedule notifications for future matches if this is the user's team
+      // Wrap in try-catch to prevent errors from blocking match loading
       if (mounted) {
-        await _scheduleNotifications(allMatches);
+        try {
+          await _scheduleNotifications(allMatches);
+        } catch (e) {
+          print('⚠️  Warning: Could not schedule notifications: $e');
+          // Continue loading matches even if notification scheduling fails
+        }
       }
 
       if (mounted) {
@@ -220,11 +271,14 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           _teamMatches = allMatches;
           _isLoadingCompetitionData = false;
         });
+        print('✅ Set ${_teamMatches.length} matches in state');
       }
     } catch (e) {
-      print('Error loading competition data: $e');
+      print('❌ Error loading competition data: $e');
+      print('   Stack trace: ${StackTrace.current}');
       if (mounted) {
         setState(() {
+          _teamMatches = []; // Clear on error
           _isLoadingCompetitionData = false;
         });
       }
@@ -486,18 +540,21 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
     final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
     final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
     
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isCurrentTeam 
             ? (tierColor ?? AppConstants.vexIQBlue)
-            : Colors.grey[300],
+            : (isDark ? Colors.grey[800] : Colors.grey[300]),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         teamNumber,
         style: TextStyle(
-          color: isCurrentTeam ? Colors.white : Colors.black87,
+          color: isCurrentTeam 
+              ? Colors.white 
+              : (isDark ? Colors.white : Colors.black87),
           fontWeight: isCurrentTeam ? FontWeight.bold : FontWeight.normal,
           fontSize: 14,
         ),
