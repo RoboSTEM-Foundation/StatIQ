@@ -3,8 +3,9 @@ import 'package:logger/logger.dart';
 
 /// A global logger instance configured to only output logs in debug mode.
 /// 
-/// In release mode, all logs are suppressed by using [Level.off].
-/// In debug mode, logs are output with a pretty printer for readability.
+/// In release mode, all logs are suppressed by checking `kDebugMode` before
+/// each log call. In debug mode, logs are output with a pretty printer for
+/// readability.
 /// 
 /// Usage example:
 /// ```dart
@@ -22,7 +23,7 @@ class AppLogger {
   AppLogger._();
 
   /// The underlying logger instance.
-  /// Configured to use Level.off in release mode to suppress all logs.
+  /// Logs are conditionally output based on kDebugMode checks in each method.
   static final Logger _logger = Logger(
     printer: PrettyPrinter(
       methodCount: 0,
@@ -31,7 +32,6 @@ class AppLogger {
       colors: true,
       printEmojis: true,
     ),
-    level: kDebugMode ? Level.debug : Level.off,
   );
 
   /// Log a debug message.
