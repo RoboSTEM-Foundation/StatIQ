@@ -48,6 +48,9 @@ dependencies:
   # Notifications
   flutter_local_notifications: ^17.0.0
   timezone: ^0.9.2
+  
+  # Logging
+  logger: ^2.5.0
 
 dev_dependencies:
   flutter_test:

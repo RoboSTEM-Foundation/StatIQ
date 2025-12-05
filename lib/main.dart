@@ -14,6 +14,7 @@ import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/services/notification_service.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
+import 'package:stat_iq/utils/app_logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,9 +41,9 @@ Future<void> _initializeServices() async {
     final initialized = await RobotEventsAPI.initializeAPI();
     
     if (initialized) {
-      print('RobotEvents API initialized with season mapping');
+      AppLogger.i('RobotEvents API initialized with season mapping');
     } else {
-      print('API initialization failed');
+      AppLogger.w('API initialization failed');
     }
     
     // Initialize special teams service
@@ -50,26 +51,26 @@ Future<void> _initializeServices() async {
     
     // Initialize notification service
     await NotificationService().initialize();
-    print('Notification service initialized');
+    AppLogger.i('Notification service initialized');
     
     // Check API configuration
     if (ApiConfig.isApiKeyConfigured) {
-      print('API key is configured');
+      AppLogger.d('API key is configured');
       // Check API status
       final status = await RobotEventsAPI.checkApiStatus();
       if (status['status'] == 'success') {
-        print('API connection verified');
-        print('   Available seasons: ${status['season_count']}');
+        AppLogger.i('API connection verified');
+        AppLogger.d('   Available seasons: ${status['season_count']}');
       } else {
-        print('API connection issue: ${status['message']}');
+        AppLogger.w('API connection issue: ${status['message']}');
       }
     } else {
-      print('API key not configured - using offline mode');
-      print('   Set your API key in lib/constants/api_config.dart');
+      AppLogger.w('API key not configured - using offline mode');
+      AppLogger.d('   Set your API key in lib/constants/api_config.dart');
     }
     
   } catch (e) {
-    print('Error initializing services: $e');
+    AppLogger.e('Error initializing services', e);
   }
 }
 
