@@ -40,9 +40,9 @@ Future<void> _initializeServices() async {
     final initialized = await RobotEventsAPI.initializeAPI();
     
     if (initialized) {
-      print('✅ RobotEvents API initialized with season mapping');
+      print('RobotEvents API initialized with season mapping');
     } else {
-      print('⚠️  API initialization failed');
+      print('API initialization failed');
     }
     
     // Initialize special teams service
@@ -50,26 +50,26 @@ Future<void> _initializeServices() async {
     
     // Initialize notification service
     await NotificationService().initialize();
-    print('✅ Notification service initialized');
+    print('Notification service initialized');
     
     // Check API configuration
     if (ApiConfig.isApiKeyConfigured) {
-      print('✅ API key is configured');
+      print('API key is configured');
       // Check API status
       final status = await RobotEventsAPI.checkApiStatus();
       if (status['status'] == 'success') {
-        print('✅ API connection verified');
+        print('API connection verified');
         print('   Available seasons: ${status['season_count']}');
       } else {
-        print('⚠️  API connection issue: ${status['message']}');
+        print('API connection issue: ${status['message']}');
       }
     } else {
-      print('⚠️  API key not configured - using offline mode');
+      print('API key not configured - using offline mode');
       print('   Set your API key in lib/constants/api_config.dart');
     }
     
   } catch (e) {
-    print('❌ Error initializing services: $e');
+    print('Error initializing services: $e');
   }
 }
 
