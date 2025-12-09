@@ -31,6 +31,37 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
 
   static const Duration _cacheTtl = Duration(days: 2);
 
+  // Helper function to determine if a color is light (needs dark text)
+  bool _isLightColor(Color color) {
+    // Calculate relative luminance
+    final luminance = (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255;
+    return luminance > 0.5;
+  }
+
+  // Get appropriate text color for tier based on background brightness
+  Color _getTierTextColor(Color tierColor, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // For light tier colors (yellow, lime) on light backgrounds, use darker color
+    if (!isDark && _isLightColor(tierColor)) {
+      // Darken light colors for better contrast
+      if (tierColor == const Color(0xFFFFEB3B) || tierColor == const Color(0xFFCDDC39)) {
+        // Yellow and Lime - use darker version
+        return const Color(0xFFF57F17); // Darker yellow/orange
+      }
+      // For other light colors, darken them
+      return Color.fromRGBO(
+        (tierColor.red * 0.6).round(),
+        (tierColor.green * 0.6).round(),
+        (tierColor.blue * 0.6).round(),
+        1.0,
+      );
+    }
+    
+    // Default: use tier color as-is
+    return tierColor;
+  }
+
   String _cacheKey() {
     final season = widget.seasonId?.toString() ?? 'current';
     final identifier = widget.team.number.isNotEmpty
@@ -185,6 +216,8 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
     final score = double.tryParse(_vexIQScore ?? '0') ?? 0.0;
     final tier = VEXIQScoring.getPerformanceTier(score, widget.team.grade);
     final tierColor = VEXIQScoring.getTierColor(tier);
+    final tierTextColor = _getTierTextColor(tierColor, context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacingM),
@@ -202,6 +235,10 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
           color: tierColor.withOpacity(0.3),
           width: 1,
         ),
+        // Add white background for light tier colors to improve readability
+        color: !isDark && _isLightColor(tierColor) 
+            ? Colors.white.withOpacity(0.7) 
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +266,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
               Text(
                 '${score.toStringAsFixed(1)}%',
                 style: AppConstants.headline6.copyWith(
-                  color: tierColor,
+                  color: tierTextColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -244,13 +281,15 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
                   vertical: 2,
                 ),
                 decoration: BoxDecoration(
-                  color: tierColor.withOpacity(0.2),
+                  color: !isDark && _isLightColor(tierColor)
+                      ? Colors.white.withOpacity(0.8)
+                      : tierColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
                 ),
                 child: Text(
                   tier,
                   style: AppConstants.caption.copyWith(
-                    color: tierColor,
+                    color: tierTextColor,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

@@ -66,20 +66,20 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
         });
       } else {
         // Initialize simple search with cached data
-        await SimpleTeamSearch.initialize();
+      await SimpleTeamSearch.initialize();
+      
+      if (mounted) {
+        final hasData = SimpleTeamSearch.isReady();
+        final teamCount = SimpleTeamSearch.getTeamCount();
+        print('📱 Search initialized: hasData=$hasData, teamCount=$teamCount');
         
-        if (mounted) {
-          final hasData = SimpleTeamSearch.isReady();
-          final teamCount = SimpleTeamSearch.getTeamCount();
-          print('📱 Search initialized: hasData=$hasData, teamCount=$teamCount');
-          
-          setState(() {
-            _hasData = hasData;
-            _isLoading = false;
-          });
-          
-          // Show first 20 teams by default
-          _performSearch('');
+        setState(() {
+          _hasData = hasData;
+          _isLoading = false;
+        });
+        
+        // Show first 20 teams by default
+        _performSearch('');
         }
       }
     } catch (e) {
@@ -114,19 +114,19 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
       _performAPISearch(query);
     } else {
       // Use cached simple search
-      if (query.trim().isEmpty) {
-        // Show first 20 teams when no search
-        _searchResults = SimpleTeamSearch.getFirstTeams(20);
-        print('📱 Showing first 20 teams: ${_searchResults.length} results');
-      } else {
-        // Search by team number (fastest)
-        _searchResults = SimpleTeamSearch.searchByNumber(query, limit: 50);
-        print('🔍 Search for "$query": ${_searchResults.length} results');
-      }
-      
-      setState(() {
-        _isSearching = false;
-      });
+    if (query.trim().isEmpty) {
+      // Show first 20 teams when no search
+      _searchResults = SimpleTeamSearch.getFirstTeams(20);
+      print('📱 Showing first 20 teams: ${_searchResults.length} results');
+    } else {
+      // Search by team number (fastest)
+      _searchResults = SimpleTeamSearch.searchByNumber(query, limit: 50);
+      print('🔍 Search for "$query": ${_searchResults.length} results');
+    }
+    
+    setState(() {
+      _isSearching = false;
+    });
     }
   }
 
@@ -424,12 +424,12 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          children: [
-                            Text(
-                              team.number,
-                              style: AppConstants.headline6.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                      children: [
+                        Text(
+                          team.number,
+                          style: AppConstants.headline6.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                             ),
                             if (teamTier != null) ...[
                               const SizedBox(width: 6),

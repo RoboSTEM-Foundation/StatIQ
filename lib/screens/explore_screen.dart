@@ -259,12 +259,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_signatureEvents.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Center(
                 child: Text(
                   'No upcoming signature events found',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: ThemeUtils.getMutedTextColor(context)),
                 ),
               ),
             )
@@ -301,12 +301,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                Icon(Icons.location_on, size: 16, color: ThemeUtils.getMutedTextColor(context)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     event.location,
-                    style: const TextStyle(color: Colors.grey),
+                    style: TextStyle(color: ThemeUtils.getMutedTextColor(context)),
                   ),
                 ),
               ],
@@ -315,11 +315,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                  Icon(Icons.calendar_today, size: 16, color: ThemeUtils.getMutedTextColor(context)),
                   const SizedBox(width: 4),
                   Text(
                     _formatEventDate(event.start!),
-                    style: const TextStyle(color: Colors.grey),
+                    style: TextStyle(color: ThemeUtils.getMutedTextColor(context)),
                   ),
                 ],
               ),
@@ -413,8 +413,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     backgroundColor: AppConstants.vexIQBlue,
                     child: Text(
                       '${rank['rank'] ?? index + 1}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -447,14 +447,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       if (team.city.isNotEmpty || team.region.isNotEmpty || team.country.isNotEmpty) ...[
                         Row(
                           children: [
-                            const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                            Icon(Icons.location_on, size: 14, color: ThemeUtils.getMutedTextColor(context)),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 _buildLocationString(team),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey,
+                                  color: ThemeUtils.getMutedTextColor(context),
                                 ),
                               ),
                             ),
@@ -478,9 +478,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         const SizedBox(height: 2),
                         Text(
                           'P: ${scores['programming'] ?? 0} | D: ${scores['driver'] ?? 0}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey,
+                            color: ThemeUtils.getMutedTextColor(context),
                           ),
                         ),
                       ],

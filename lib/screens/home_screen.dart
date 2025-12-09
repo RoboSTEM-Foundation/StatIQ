@@ -39,6 +39,28 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload favorites when UserSettings changes (e.g., when myTeam changes)
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+    userSettings.addListener(_onUserSettingsChanged);
+  }
+
+  @override
+  void dispose() {
+    final userSettings = Provider.of<UserSettings>(context, listen: false);
+    userSettings.removeListener(_onUserSettingsChanged);
+    super.dispose();
+  }
+
+  void _onUserSettingsChanged() {
+    // Reload favorites when settings change (especially myTeam)
+    if (mounted) {
+      _loadFavoriteTeams();
+    }
+  }
+
   Future<void> _checkFirstLaunch() async {
     final prefs = await SharedPreferences.getInstance();
     final isFirstLaunch = prefs.getBool('first_launch') ?? true;
@@ -239,6 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Your Events',
             style: AppConstants.headline5.copyWith(
               fontWeight: FontWeight.bold,
+              color: ThemeUtils.getTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingM),
@@ -257,6 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     '${favoriteEventSkus.length} Favorite Event${favoriteEventSkus.length == 1 ? '' : 's'}',
                     style: AppConstants.headline6.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: ThemeUtils.getTextColor(context),
                     ),
                   ),
                   const SizedBox(height: AppConstants.spacingM),
@@ -271,13 +295,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                     ),
                   ] else ...[
-                    Text(
+                  Text(
                       'Loading favorite events...',
-                      style: AppConstants.bodyText2.copyWith(
-                        color: ThemeUtils.getSecondaryTextColor(context),
-                      ),
-                      textAlign: TextAlign.center,
+                    style: AppConstants.bodyText2.copyWith(
+                      color: ThemeUtils.getSecondaryTextColor(context),
                     ),
+                    textAlign: TextAlign.center,
+                  ),
                   ],
                   const SizedBox(height: AppConstants.spacingM),
                   ElevatedButton(
@@ -302,7 +326,10 @@ class _HomeScreenState extends State<HomeScreen> {
         leading: const Icon(Icons.event, color: AppConstants.vexIQGreen),
         title: Text(
           event.name,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: ThemeUtils.getTextColor(context),
+          ),
         ),
         subtitle: Text(
           event.location,
@@ -333,6 +360,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Your Teams',
             style: AppConstants.headline5.copyWith(
               fontWeight: FontWeight.bold,
+              color: ThemeUtils.getTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingM),
@@ -358,54 +386,55 @@ class _HomeScreenState extends State<HomeScreen> {
         final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
         final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
         
-        return Card(
-          margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
-          elevation: AppConstants.elevationS,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
+      elevation: AppConstants.elevationS,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
             side: (isMyTeam || tierColor != null) ? BorderSide(
               color: tierColor ?? AppConstants.vexIQBlue,
               width: 2,
             ) : BorderSide.none,
-          ),
+      ),
           color: (isMyTeam || tierColor != null) 
               ? (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1) 
               : null,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
-            onTap: () => _showTeamDetails(team),
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.spacingM),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
+        onTap: () => _showTeamDetails(team),
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spacingM),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
+                  CircleAvatar(
                         backgroundColor: (isMyTeam || tierColor != null) 
                             ? (tierColor ?? AppConstants.vexIQBlue) 
                             : AppConstants.vexIQOrange,
-                        radius: 24,
-                        child: Text(
-                          team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
-                          style: AppConstants.bodyText1.copyWith(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    radius: 24,
+                    child: Text(
+                      team.number.replaceAll(RegExp(r'[^A-Z]'), ''),
+                      style: AppConstants.bodyText1.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                  ),
                   const SizedBox(width: AppConstants.spacingM),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          children: [
-                            Text(
-                              team.number,
-                              style: AppConstants.headline6.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                      children: [
+                        Text(
+                          team.number,
+                          style: AppConstants.headline6.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: ThemeUtils.getTextColor(context),
+                          ),
                             ),
                             if (teamTier != null) ...[
                               const SizedBox(width: 6),
@@ -532,6 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Quick Actions',
             style: AppConstants.headline6.copyWith(
               fontWeight: FontWeight.bold,
+              color: ThemeUtils.getTextColor(context),
             ),
           ),
           const SizedBox(height: AppConstants.spacingM),
@@ -586,6 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title,
               style: AppConstants.bodyText2.copyWith(
                 fontWeight: FontWeight.bold,
+                color: ThemeUtils.getTextColor(context),
               ),
               textAlign: TextAlign.center,
             ),

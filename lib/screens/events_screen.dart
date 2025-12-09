@@ -739,9 +739,9 @@ class _EventsScreenState extends State<EventsScreen> {
       return Center(
         child: SingleChildScrollView(
           physics: const NeverScrollableScrollPhysics(),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -755,25 +755,25 @@ class _EventsScreenState extends State<EventsScreen> {
                   ),
                   Icon(
                     Icons.search,
-                    color: AppConstants.vexIQOrange,
+                color: AppConstants.vexIQOrange,
                     size: 32,
                   ),
                 ],
-              ),
-              const SizedBox(height: AppConstants.spacingL),
-              Text(
+          ),
+          const SizedBox(height: AppConstants.spacingL),
+          Text(
                 'Comprehensive Search in Progress',
                 style: AppConstants.headline6.copyWith(
-                  color: Theme.of(context).textTheme.titleLarge?.color,
+              color: Theme.of(context).textTheme.titleLarge?.color,
                   fontWeight: FontWeight.bold,
-                ),
-              ),
+            ),
+          ),
               const SizedBox(height: AppConstants.spacingS),
               Text(
                 'Searching through all events...',
                 style: AppConstants.bodyText1.copyWith(
                   color: ThemeUtils.getSecondaryTextColor(context),
-                ),
+            ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppConstants.spacingS),
@@ -821,12 +821,12 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   );
                 }),
-              ),
-            ],
           ),
-        ),
-      );
-    }
+        ],
+          ),
+      ),
+    );
+  }
 
     final totalItems = _getTotalItemCount(groupedEvents);
     final hasEvents = totalItems > 0;
@@ -859,31 +859,31 @@ class _EventsScreenState extends State<EventsScreen> {
                 : 'Try a different search term or check back later.';
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingXL),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.event_busy,
-                    size: 64,
-                    color: ThemeUtils.getVeryMutedTextColor(context),
-                  ),
-                  const SizedBox(height: AppConstants.spacingM),
-                  Text(
+      child: Column(
+        children: [
+          Icon(
+                Icons.event_busy,
+            size: 64,
+                color: ThemeUtils.getVeryMutedTextColor(context),
+          ),
+          const SizedBox(height: AppConstants.spacingM),
+          Text(
                     message,
-                    style: AppConstants.headline6.copyWith(
-                      color: ThemeUtils.getSecondaryTextColor(context),
-                    ),
+                style: AppConstants.headline6.copyWith(
+              color: ThemeUtils.getSecondaryTextColor(context),
+            ),
                     textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppConstants.spacingS),
-                  Text(
+          ),
+          const SizedBox(height: AppConstants.spacingS),
+          Text(
                     subtitle,
-                    style: AppConstants.bodyText2.copyWith(
-                      color: ThemeUtils.getSecondaryTextColor(context),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+            style: AppConstants.bodyText2.copyWith(
+              color: ThemeUtils.getSecondaryTextColor(context),
+            ),
+            textAlign: TextAlign.center,
+          ),
+            ],
+          ),
             );
           }
           final item = _getItemAtIndex(index - 1, groupedEvents);
@@ -894,9 +894,9 @@ class _EventsScreenState extends State<EventsScreen> {
             return _buildEventCard(event);
           }
         },
-      ),
-    );
-  }
+        ),
+      );
+    }
 
   void _showSortOptions() {
     showDialog(
@@ -1183,41 +1183,41 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Widget _buildEventCard(Event event) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EventDetailsScreen(event: event),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.spacingM),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+            return Card(
+              margin: const EdgeInsets.only(bottom: AppConstants.spacingS),
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EventDetailsScreen(event: event),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.spacingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Text(
-                                event.name,
-                                style: AppConstants.bodyText1.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                  event.name,
+                                  style: AppConstants.bodyText1.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1229,103 +1229,103 @@ class _EventsScreenState extends State<EventsScreen> {
                                 ),
                               ),
                           ],
-                        ),
-                        if (_getEventLocation(event).isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            _getEventLocation(event),
-                            style: AppConstants.caption.copyWith(
-                              color: ThemeUtils.getSecondaryTextColor(context),
+                                ),
+                                if (_getEventLocation(event).isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _getEventLocation(event),
+                                    style: AppConstants.caption.copyWith(
+                                      color: ThemeUtils.getSecondaryTextColor(context),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                      color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                      _getEventLevelLabel(event),
+                              style: AppConstants.caption.copyWith(
+                        color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ],
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _getEventLevelLabel(event),
-                      style: AppConstants.caption.copyWith(
-                        color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)),
-                        fontWeight: FontWeight.w600,
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppConstants.spacingS),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
+                      const SizedBox(height: AppConstants.spacingS),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
                         _getEventTypeIconFromLevel(_getEventLevelLabel(event)),
-                        size: 16,
+                                size: 16,
                         color: _getEventTypeColorFromLevel(_getEventLevelLabel(event)),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
                         _getEventLevelLabel(event),
-                        style: AppConstants.caption.copyWith(
-                          color: ThemeUtils.getSecondaryTextColor(context),
-                        ),
+                                style: AppConstants.caption.copyWith(
+                                  color: ThemeUtils.getSecondaryTextColor(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Consumer<UserSettings>(
+                                builder: (context, settings, child) {
+                                  final isFavorite = settings.isFavoriteEvent(event.sku);
+                                  return IconButton(
+                                    icon: Icon(
+                                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                                      color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      if (isFavorite) {
+                                        await settings.removeFavoriteEvent(event.sku);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('${event.name} removed from favorites')),
+                                          );
+                                        }
+                                      } else {
+                                        await settings.addFavoriteEvent(event.sku);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('${event.name} added to favorites')),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
+                              Icon(
+                                Icons.chevron_right,
+                                color: ThemeUtils.getSecondaryTextColor(context),
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Consumer<UserSettings>(
-                        builder: (context, settings, child) {
-                          final isFavorite = settings.isFavoriteEvent(event.sku);
-                          return IconButton(
-                            icon: Icon(
-                              isFavorite ? Icons.favorite : Icons.favorite_border,
-                              color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
-                              size: 20,
-                            ),
-                            onPressed: () async {
-                              if (isFavorite) {
-                                await settings.removeFavoriteEvent(event.sku);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('${event.name} removed from favorites')),
-                                  );
-                                }
-                              } else {
-                                await settings.addFavoriteEvent(event.sku);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('${event.name} added to favorites')),
-                                  );
-                                }
-                              }
-                            },
-                          );
-                        },
-                      ),
-                      Icon(
-                        Icons.chevron_right,
-                        color: ThemeUtils.getSecondaryTextColor(context),
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1370,8 +1370,8 @@ class _EventsScreenState extends State<EventsScreen> {
                     borderRadius: borderRadius,
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+          mainAxisSize: MainAxisSize.min,
+          children: [
                       Text(
                         isCurrent ? 'Current' : 'All',
                         style: AppConstants.bodyText2.copyWith(
@@ -1385,13 +1385,13 @@ class _EventsScreenState extends State<EventsScreen> {
                           color: selected
                               ? AppConstants.vexIQBlue
                               : ThemeUtils.getSecondaryTextColor(context).withOpacity(0.7),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-              ),
-            );
+              ],
+            ),
+        ),
+      ),
+    );
           }),
         ),
       ),

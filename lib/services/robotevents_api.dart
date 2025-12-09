@@ -355,7 +355,7 @@ class RobotEventsAPI {
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as List<dynamic>;
         print('✅ Loaded ${data.length} world skills rankings for $apiGradeLevel');
-        return data;
+    return data;
       } else {
         print('❌ Error loading skills rankings: ${response.statusCode}');
         return [];
@@ -484,7 +484,7 @@ class RobotEventsAPI {
     final apiLevels = levels != null && levels.isNotEmpty
         ? ApiConfig.mapDisplayLevelsToApi(levels)
         : levels;
-
+    
     // If we have a search query, use the enhanced scraping method
     if (query != null && query.trim().isNotEmpty) {
       return await searchEventsWithScraping(
@@ -831,7 +831,7 @@ class RobotEventsAPI {
       if (fromDate != null) {
         scrapingParams['from_date'] = fromDate.toIso8601String().split('T')[0];
       } else {
-        scrapingParams['from_date'] = '1970-01-01';
+      scrapingParams['from_date'] = '1970-01-01';
       }
       
       if (toDate != null) {
@@ -1506,7 +1506,7 @@ class RobotEventsAPI {
       throw Exception('API error: ${response.statusCode}');
     }
   }
-
+  
   // Get matches for an event division with pagination support
   static Future<List<dynamic>> getEventMatches({
     required int eventId,

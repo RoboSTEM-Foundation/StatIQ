@@ -28,7 +28,7 @@ class ApiConfig {
   static String get randomApiKey {
     final selectedKey = robotEventsApiKeys[_random.nextInt(robotEventsApiKeys.length)];
     final keyIndex = robotEventsApiKeys.indexOf(selectedKey) + 1;
-    print('Using API Key #$keyIndex/${robotEventsApiKeys.length} for request');
+    print('🔑 Using API Key #$keyIndex/${robotEventsApiKeys.length} for request');
     return selectedKey;
   }
   
@@ -196,7 +196,7 @@ class ApiConfig {
     int page = 1,
   }) {
     final selectedSeasonId = seasonId ?? getSelectedSeasonId();
-    print('Building event search params with season ID: $selectedSeasonId (passed: $seasonId, default: ${getSelectedSeasonId()})');
+    print('🔍 Building event search params with season ID: $selectedSeasonId (passed: $seasonId, default: ${getSelectedSeasonId()})');
     
     final params = <String, dynamic>{
       'page': page,

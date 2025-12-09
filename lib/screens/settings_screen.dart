@@ -6,6 +6,7 @@ import 'package:stat_iq/services/team_sync_service.dart';
 import 'package:stat_iq/services/optimized_team_search.dart';
 import 'package:stat_iq/screens/credits_screen.dart';
 import 'package:stat_iq/widgets/optimized_team_search_widget.dart';
+import 'package:stat_iq/utils/theme_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -546,17 +547,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        title: Text('Syncing Team List'),
+      builder: (context) => AlertDialog(
+        title: const Text('Syncing Team List'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Downloading team data from GitHub...'),
-            SizedBox(height: 8),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Downloading team data from GitHub...'),
+            const SizedBox(height: 8),
             Text('This may take up to 2 minutes for large files', 
-                 style: TextStyle(fontSize: 12, color: Colors.grey)),
+                 style: TextStyle(fontSize: 12, color: ThemeUtils.getMutedTextColor(context))),
           ],
         ),
       ),
