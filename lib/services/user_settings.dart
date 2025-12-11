@@ -21,7 +21,7 @@ class UserSettings extends ChangeNotifier {
   
   // Default values
   String _gradeLevel = 'Middle School';
-  int _selectedSeasonId = 192; // Default VEX IQ season
+  int _selectedSeasonId = 196; // Default VEX IQ season (Mix & Match 2025-2026)
   bool _minimalistic = true;
   bool _vexIQScore = true;
   Color _themeColor = Colors.red;

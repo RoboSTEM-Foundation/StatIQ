@@ -19,17 +19,17 @@ class SpecialTeamsService {
       final String jsonString = await rootBundle.loadString('assets/special_teams.json');
       _specialTeamsData = json.decode(jsonString) as Map<String, dynamic>;
       _isLoaded = true;
-      print('✅ Loaded special teams data');
+      AppLogger.d('✅ Loaded special teams data');
       
       // Debug: Print all teams
       final tierNames = ['cappedPinsAlliance', 'robostem', 'highlighted'];
       for (final tierName in tierNames) {
         final tierData = _specialTeamsData![tierName] as Map<String, dynamic>?;
         final teams = tierData?['teams'] as List<dynamic>?;
-        print('⭐ Tier $tierName: ${teams?.length ?? 0} teams - $teams');
+        AppLogger.d('⭐ Tier $tierName: ${teams?.length ?? 0} teams - $teams');
       }
     } catch (e) {
-      print('❌ Error loading special teams: $e');
+      AppLogger.d('❌ Error loading special teams: $e');
       _specialTeamsData = null;
     }
   }
@@ -37,7 +37,7 @@ class SpecialTeamsService {
   /// Get the tier/type for a team number
   String? getTeamTier(String teamNumber) {
     if (!_isLoaded || _specialTeamsData == null) {
-      print('❌ SpecialTeamsService: Not loaded or no data');
+      AppLogger.d('❌ SpecialTeamsService: Not loaded or no data');
       return null;
     }
     
@@ -51,14 +51,14 @@ class SpecialTeamsService {
         for (final team in teams) {
           final lowerTeam = team.toString().toLowerCase();
           if (lowerTeam == lowerTeamNumber) {
-            print('✅ Found special team: $teamNumber -> $tierName');
+            AppLogger.d('✅ Found special team: $teamNumber -> $tierName');
             return tierName;
           }
         }
       }
     }
     
-    print('❌ No special tier found for team: $teamNumber');
+    AppLogger.d('❌ No special tier found for team: $teamNumber');
     return null;
   }
   

@@ -118,7 +118,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
             }
           }
         } catch (e) {
-          print('Error parsing statIQ score cache: $e');
+          AppLogger.d('Error parsing statIQ score cache: $e');
         }
       }
 
@@ -167,7 +167,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
       };
       await prefs.setString(cacheKey, jsonEncode(cachePayload));
     } catch (e) {
-      print('Error calculating statIQ Score: $e');
+      AppLogger.d('Error calculating statIQ Score: $e');
       
       // Fallback to basic scoring
       final basicScore = VEXIQScoring.calculateBasicScore(widget.team);
@@ -214,7 +214,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
     }
 
     final score = double.tryParse(_vexIQScore ?? '0') ?? 0.0;
-    final tier = VEXIQScoring.getPerformanceTier(score, widget.team.grade);
+    final tier = VEXIQScoring.getPerformanceTier(score);
     final tierColor = VEXIQScoring.getTierColor(tier);
     final tierTextColor = _getTierTextColor(tierColor, context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -371,7 +371,6 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
                   color: VEXIQScoring.getTierColor(
                     VEXIQScoring.getPerformanceTier(
                       _scoreBreakdown!['percentage'],
-                      widget.team.grade,
                     ),
                   ),
                 ),

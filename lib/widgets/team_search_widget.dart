@@ -100,7 +100,7 @@ class _TeamSearchWidgetState extends State<TeamSearchWidget> {
       setState(() {
         _isSearching = false;
       });
-      print('Search error: $e');
+      AppLogger.d('Search error: $e');
     }
   }
 

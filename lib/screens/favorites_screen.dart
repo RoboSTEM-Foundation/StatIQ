@@ -62,7 +62,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             teams.add(teamData);
           }
         } catch (e) {
-          print('Error loading team $teamNumber: $e');
+          AppLogger.d('Error loading team $teamNumber: $e');
         }
       }
       
@@ -73,7 +73,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         });
       }
     } catch (e) {
-      print('Error loading favorite teams: $e');
+      AppLogger.d('Error loading favorite teams: $e');
       if (mounted) {
         setState(() {
           _isLoadingTeams = false;
@@ -100,7 +100,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             events.add(eventData);
           }
         } catch (e) {
-          print('Error loading event $eventSku: $e');
+          AppLogger.d('Error loading event $eventSku: $e');
         }
       }
       
@@ -111,7 +111,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         });
       }
     } catch (e) {
-      print('Error loading favorite events: $e');
+      AppLogger.d('Error loading favorite events: $e');
       if (mounted) {
         setState(() {
           _isLoadingEvents = false;

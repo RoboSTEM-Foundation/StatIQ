@@ -1,6 +1,8 @@
+import 'dart:math' as math;
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
+import 'package:stat_iq/utils/logger.dart';
 import 'package:flutter/material.dart';
 
 class VEXIQScoring {
@@ -15,7 +17,7 @@ class VEXIQScoring {
     List<dynamic>? rankingsData,
     int? seasonId,
   }) async {
-    print('=== statIQ Score Calculation Debug for ${team.number} ===');
+    AppLogger.d('=== statIQ Score Calculation Debug for ${team.number} ===');
     
     double totalScore = 0.0;
     double maxScore = 100.0;
@@ -34,7 +36,7 @@ class VEXIQScoring {
       // 1. World Skills Ranking (30 points)
       final worldSkillsScore = _calculateWorldSkillsRankingScore(worldSkills);
       totalScore += worldSkillsScore;
-      print('World Skills Ranking Score: ${worldSkillsScore.toStringAsFixed(2)} / 30.0');
+      AppLogger.d('World Skills Ranking Score: ${worldSkillsScore.toStringAsFixed(2)} / 30.0');
       
       // 2. Skills Score Quality (25 points) + Balance Bonus (5 points)
       final skillsScores = await _calculateSkillsScoreQuality(worldSkills, seasonId: seasonId);
@@ -43,50 +45,50 @@ class VEXIQScoring {
       if (skillsScores['balance']! > 0) {
         maxScore += 5.0; // Balance bonus increases max score
       }
-      print('Skills Score Quality: ${skillsScores['quality']!.toStringAsFixed(2)} / 25.0');
-      print('Skills Balance Bonus: ${skillsScores['balance']!.toStringAsFixed(2)} / 5.0');
+      AppLogger.d('Skills Score Quality: ${skillsScores['quality']!.toStringAsFixed(2)} / 25.0');
+      AppLogger.d('Skills Balance Bonus: ${skillsScores['balance']!.toStringAsFixed(2)} / 5.0');
       
       // 3. Competition Performance (20 points)
       final competitionScore = _calculateCompetitionPerformance(rankingsData);
       totalScore += competitionScore;
-      print('Competition Performance: ${competitionScore.toStringAsFixed(2)} / 20.0');
+      AppLogger.d('Competition Performance: ${competitionScore.toStringAsFixed(2)} / 20.0');
       
       // 4. Award Excellence (20 points)
       final awardScore = _calculateAwardExcellence(awardsData);
       totalScore += awardScore;
-      print('Award Excellence: ${awardScore.toStringAsFixed(2)} / 20.0');
+      AppLogger.d('Award Excellence: ${awardScore.toStringAsFixed(2)} / 20.0');
     } else {
       // Enhanced scoring without skills data (redistribute weights)
-      print('No skills data - using enhanced competition-based scoring');
+      AppLogger.d('No skills data - using enhanced competition-based scoring');
       
       // 1. Competition Performance (40 points - doubled weight)
       final competitionScore = _calculateCompetitionPerformance(rankingsData) * 2.0;
       totalScore += competitionScore;
-      print('Enhanced Competition Performance: ${competitionScore.toStringAsFixed(2)} / 40.0');
+      AppLogger.d('Enhanced Competition Performance: ${competitionScore.toStringAsFixed(2)} / 40.0');
       
       // 2. Award Excellence (30 points - increased weight)
       final awardScore = _calculateAwardExcellence(awardsData) * 1.5;
       totalScore += awardScore;
-      print('Enhanced Award Excellence: ${awardScore.toStringAsFixed(2)} / 30.0');
+      AppLogger.d('Enhanced Award Excellence: ${awardScore.toStringAsFixed(2)} / 30.0');
       
       // 3. Event Participation Bonus (15 points)
       final participationScore = _calculateEventParticipation(eventsData);
       totalScore += participationScore;
-      print('Event Participation Score: ${participationScore.toStringAsFixed(2)} / 15.0');
+      AppLogger.d('Event Participation Score: ${participationScore.toStringAsFixed(2)} / 15.0');
       
       // 4. Consistency Bonus (15 points)
       final consistencyScore = _calculateConsistencyBonus(rankingsData);
       totalScore += consistencyScore;
-      print('Consistency Bonus: ${consistencyScore.toStringAsFixed(2)} / 15.0');
+      AppLogger.d('Consistency Bonus: ${consistencyScore.toStringAsFixed(2)} / 15.0');
     }
     
     // Calculate final percentage
     final percentage = (totalScore / maxScore) * 100.0;
     
-    print('Total Score: ${totalScore.toStringAsFixed(2)} / ${maxScore.toStringAsFixed(2)}');
-    print('Percentage: ${percentage.toStringAsFixed(2)}%');
-    print('Performance Tier: ${getPerformanceTier(percentage, team.grade)}');
-    print('=== End statIQ Score Calculation ===');
+    AppLogger.d('Total Score: ${totalScore.toStringAsFixed(2)} / ${maxScore.toStringAsFixed(2)}');
+    AppLogger.d('Percentage: ${percentage.toStringAsFixed(2)}%');
+    AppLogger.d('Performance Tier: ${getPerformanceTier(percentage)}');
+    AppLogger.d('=== End statIQ Score Calculation ===');
     
     return percentage.toStringAsFixed(1);
   }
@@ -99,12 +101,12 @@ class VEXIQScoring {
   ) async {
     // Try RobotEvents API data
     if (worldSkillsData != null && worldSkillsData.isNotEmpty) {
-      print('Using RobotEvents skills data');
+      AppLogger.d('Using RobotEvents skills data');
       return _parseWorldSkills(worldSkillsData);
     }
     
     // Skills data unavailable - estimate from competition performance
-    print('No skills data available - using competition performance estimate');
+    AppLogger.d('No skills data available - using competition performance estimate');
     return {
       'ranking': 0,
       'combined': 0,
@@ -118,7 +120,7 @@ class VEXIQScoring {
   // Parse world skills data from various possible API responses
   static Map<String, dynamic> _parseWorldSkills(List<dynamic>? worldSkillsData) {
     if (worldSkillsData == null || worldSkillsData.isEmpty) {
-      print('No skills data provided to parse');
+      AppLogger.d('No skills data provided to parse');
       return {
         'ranking': 0,
         'combined': 0,
@@ -128,14 +130,14 @@ class VEXIQScoring {
       };
     }
     
-    print('Parsing skills data with ${worldSkillsData.length} records');
+    AppLogger.d('Parsing skills data with ${worldSkillsData.length} records');
     
     // For skills data, we want the best (highest scoring) entry
     Map<String, dynamic>? bestSkillsEntry;
     int highestCombined = 0;
     
     for (final entry in worldSkillsData) {
-      print('Skills entry: $entry');
+      AppLogger.d('Skills entry: $entry');
       
       // Try different possible score field names
       final combinedScore = _safeIntConvert(
@@ -152,7 +154,7 @@ class VEXIQScoring {
     }
     
     if (bestSkillsEntry == null) {
-      print('No valid skills entry found');
+      AppLogger.d('No valid skills entry found');
       return {
         'ranking': 0,
         'combined': 0,
@@ -180,7 +182,7 @@ class VEXIQScoring {
       'totalTeams': _safeIntConvert(bestSkillsEntry['totalTeams'] ?? 0), // Use actual total teams if available
     };
     
-    print('Parsed skills result: $result');
+    AppLogger.d('Parsed skills result: $result');
     return result;
   }
     
@@ -215,7 +217,7 @@ class VEXIQScoring {
     final driver = _safeIntConvert(worldSkills['driver']);
     final programming = _safeIntConvert(worldSkills['programming']);
     
-    print('Skills data - Combined: $combined, Driver: $driver, Programming: $programming');
+    AppLogger.d('Skills data - Combined: $combined, Driver: $driver, Programming: $programming');
     
     double qualityScore = 0.0;
     double balanceBonus = 0.0;
@@ -229,7 +231,7 @@ class VEXIQScoring {
         final percentile = _calculateSkillsPercentile(combined, skillsContext);
         qualityScore = percentile * 25.0; // Convert percentile to 25-point scale
         
-        print('Relative scoring - Season: ${seasonId ?? "current"}, '
+        AppLogger.d('Relative scoring - Season: ${seasonId ?? "current"}, '
               'Score: $combined, Percentile: ${(percentile * 100).toStringAsFixed(1)}%, '
               'Quality Score: ${qualityScore.toStringAsFixed(2)}');
         
@@ -243,18 +245,18 @@ class VEXIQScoring {
           final balanceRatio = minPercentile / ((driverPercentile + programmingPercentile) / 2.0);
           balanceBonus = balanceRatio * 5.0;
           
-          print('Enhanced balance - Driver: ${(driverPercentile * 100).toStringAsFixed(1)}%, '
+          AppLogger.d('Enhanced balance - Driver: ${(driverPercentile * 100).toStringAsFixed(1)}%, '
                 'Programming: ${(programmingPercentile * 100).toStringAsFixed(1)}%, '
                 'Balance Bonus: ${balanceBonus.toStringAsFixed(2)}');
         }
       } else {
         // Fallback to adaptive fixed thresholds based on season progression
-        print('No season context available - using adaptive thresholds');
+        AppLogger.d('No season context available - using adaptive thresholds');
         final adaptiveThreshold = _getAdaptiveScoreThreshold(seasonId);
         final normalizedScore = (combined / adaptiveThreshold).clamp(0.0, 1.0);
       qualityScore = normalizedScore * 25.0;
       
-        print('Adaptive scoring - Threshold: $adaptiveThreshold, '
+        AppLogger.d('Adaptive scoring - Threshold: $adaptiveThreshold, '
               'Normalized: ${normalizedScore.toStringAsFixed(3)}, '
               'Quality Score: ${qualityScore.toStringAsFixed(2)}');
       
@@ -266,7 +268,7 @@ class VEXIQScoring {
         }
       }
     } else {
-      print('No combined score available for skills quality calculation');
+      AppLogger.d('No combined score available for skills quality calculation');
     }
     
     return {
@@ -279,7 +281,7 @@ class VEXIQScoring {
   static Future<Map<String, dynamic>?> _getSeasonSkillsContext(int? seasonId) async {
     try {
       final currentSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
-      print('Fetching skills context for season: $currentSeasonId');
+      AppLogger.d('Fetching skills context for season: $currentSeasonId');
       
       // Get world skills rankings for current season (multiple pages for better sample)
       final allSkillsData = <dynamic>[];
@@ -299,7 +301,7 @@ class VEXIQScoring {
       }
       
       if (allSkillsData.isEmpty) {
-        print('No skills data found for season $currentSeasonId');
+        AppLogger.d('No skills data found for season $currentSeasonId');
         return null;
       }
       
@@ -334,13 +336,13 @@ class VEXIQScoring {
         'averageScore': combinedScores.isNotEmpty ? combinedScores.reduce((a, b) => a + b) / combinedScores.length : 0.0,
       };
       
-      print('Skills context loaded - Teams: ${context['totalTeams']}, '
+      AppLogger.d('Skills context loaded - Teams: ${context['totalTeams']}, '
             'High: ${context['highScore']}, Median: ${context['medianScore']}, '
             'Avg: ${(context['averageScore'] as double).toStringAsFixed(1)}');
       
       return context;
     } catch (e) {
-      print('Error fetching season skills context: $e');
+      AppLogger.d('Error fetching season skills context: $e');
       return null;
     }
   }
@@ -377,7 +379,7 @@ class VEXIQScoring {
     // Calculate percentile (0.0 to 1.0)
     final percentile = scoresBeat / scores.length;
     
-    print('Percentile calculation ($skillType) - Score: $score beats $scoresBeat/${scores.length} = ${(percentile * 100).toStringAsFixed(1)}%');
+    AppLogger.d('Percentile calculation ($skillType) - Score: $score beats $scoresBeat/${scores.length} = ${(percentile * 100).toStringAsFixed(1)}%');
     
     return percentile;
   }
@@ -405,7 +407,7 @@ class VEXIQScoring {
         baseThreshold = 300.0; // Default
     }
     
-    print('Using adaptive threshold: $baseThreshold for season $currentSeasonId');
+    AppLogger.d('Using adaptive threshold: $baseThreshold for season $currentSeasonId');
     return baseThreshold;
   }
   
@@ -547,7 +549,7 @@ class VEXIQScoring {
     // Calculate consistency based on standard deviation of rankings
     final mean = rankings.reduce((a, b) => a + b) / rankings.length;
     final variance = rankings.map((rank) => (rank - mean) * (rank - mean)).reduce((a, b) => a + b) / rankings.length;
-    final stdDev = variance > 0 ? (variance * variance) : 0; // Simplified std dev calc
+    final stdDev = variance > 0 ? math.sqrt(variance) : 0; // Standard deviation = sqrt(variance)
     
     // Lower standard deviation = higher consistency = higher score
     // Scale inversely with std dev (max 15 points for very consistent performance)
@@ -557,7 +559,7 @@ class VEXIQScoring {
   }
   
   // Get performance tier based on percentage (matches VRC RoboScout implementation)
-  static String getPerformanceTier(double percentage, String grade) {
+  static String getPerformanceTier(double percentage) {
     switch (percentage) {
       case >= 90:
       return 'Elite';

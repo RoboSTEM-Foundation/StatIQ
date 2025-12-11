@@ -14,6 +14,7 @@ import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/services/notification_service.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 import 'package:stat_iq/constants/api_config.dart';
+import 'package:stat_iq/utils/logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,9 +34,9 @@ Future<void> _initializeServices() async {
     final initialized = await RobotEventsAPI.initializeAPI();
     
     if (initialized) {
-      print('✅ RobotEvents API initialized with season mapping');
+      AppLogger.d('✅ RobotEvents API initialized with season mapping');
     } else {
-      print('⚠️  API initialization failed');
+      AppLogger.d('⚠️  API initialization failed');
     }
     
     // Initialize special teams service
@@ -43,26 +44,26 @@ Future<void> _initializeServices() async {
     
     // Initialize notification service
     await NotificationService().initialize();
-    print('✅ Notification service initialized');
+    AppLogger.d('✅ Notification service initialized');
     
     // Check API configuration
     if (ApiConfig.isApiKeyConfigured) {
-      print('✅ API key is configured');
+      AppLogger.d('✅ API key is configured');
       // Check API status
       final status = await RobotEventsAPI.checkApiStatus();
       if (status['status'] == 'success') {
-        print('✅ API connection verified');
-        print('   Available seasons: ${status['season_count']}');
+        AppLogger.d('✅ API connection verified');
+        AppLogger.d('   Available seasons: ${status['season_count']}');
       } else {
-        print('⚠️  API connection issue: ${status['message']}');
+        AppLogger.d('⚠️  API connection issue: ${status['message']}');
       }
     } else {
-      print('⚠️  API key not configured - using offline mode');
-      print('   Set your API key in lib/constants/api_config.dart');
+      AppLogger.d('⚠️  API key not configured - using offline mode');
+      AppLogger.d('   Set your API key in lib/constants/api_config.dart');
     }
     
   } catch (e) {
-    print('❌ Error initializing services: $e');
+    AppLogger.d('❌ Error initializing services: $e');
   }
 }
 
@@ -85,6 +86,7 @@ class TheCappedPinsApp extends StatelessWidget {
                   theme: _buildLightTheme(),
                   darkTheme: _buildDarkTheme(),
                   themeMode: userSettings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+                  key: ValueKey<bool>(userSettings.isDarkMode), // Force rebuild on theme change
                   home: const MainNavigation(),
                   routes: {
                     '/home': (context) => const MainNavigation(),

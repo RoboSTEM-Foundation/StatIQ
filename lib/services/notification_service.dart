@@ -44,7 +44,7 @@ class NotificationService {
     );
     
     _isInitialized = true;
-    print('✅ NotificationService initialized');
+    AppLogger.d('✅ NotificationService initialized');
   }
 
   Future<void> scheduleMatchNotification({
@@ -65,7 +65,7 @@ class NotificationService {
     
     // Don't schedule if in the past
     if (notificationTime.isBefore(DateTime.now())) {
-      print('⚠️  Cannot schedule notification in the past');
+      AppLogger.d('⚠️  Cannot schedule notification in the past');
       return;
     }
     
@@ -105,7 +105,7 @@ class NotificationService {
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
     
-    print('✅ Scheduled notification for match $matchId at ${notificationTime.toString()}');
+    AppLogger.d('✅ Scheduled notification for match $matchId at ${notificationTime.toString()}');
   }
 
   Future<void> cancelMatchNotification(int matchId) async {
@@ -114,7 +114,7 @@ class NotificationService {
     }
     
     await _flutterLocalNotificationsPlugin!.cancel(matchId);
-    print('✅ Cancelled notification for match $matchId');
+    AppLogger.d('✅ Cancelled notification for match $matchId');
   }
 
   Future<void> cancelAllMatchNotifications() async {
@@ -123,7 +123,7 @@ class NotificationService {
     }
     
     await _flutterLocalNotificationsPlugin!.cancelAll();
-    print('✅ Cancelled all match notifications');
+    AppLogger.d('✅ Cancelled all match notifications');
   }
 
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {

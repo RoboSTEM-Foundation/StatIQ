@@ -28,7 +28,7 @@ class TeamSyncService {
       
       return now.difference(lastSync) > _syncInterval;
     } catch (e) {
-      print('Error checking sync status: $e');
+      AppLogger.d('Error checking sync status: $e');
       return true; // Sync if we can't determine status
     }
   }
@@ -38,8 +38,8 @@ class TeamSyncService {
     try {
       _downloadProgress = 0.0;
       _downloadStatus = 'Starting download...';
-      print('🔄 Starting team list sync...');
-      print('📡 Fetching from: $_teamListUrl');
+      AppLogger.d('🔄 Starting team list sync...');
+      AppLogger.d('📡 Fetching from: $_teamListUrl');
       
       _downloadStatus = 'Connecting to GitHub...';
       _downloadProgress = 0.1;
@@ -61,9 +61,9 @@ class TeamSyncService {
       _downloadStatus = 'Downloading team data...';
       _downloadProgress = 0.5;
       
-      print('📊 Response status: ${response.statusCode}');
-      print('📊 Response body length: ${response.body.length}');
-      print('📊 Response body preview: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
+      AppLogger.d('📊 Response status: ${response.statusCode}');
+      AppLogger.d('📊 Response body length: ${response.body.length}');
+      AppLogger.d('📊 Response body preview: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
 
       if (response.statusCode == 200) {
         _downloadStatus = 'Parsing team data...';
@@ -72,15 +72,15 @@ class TeamSyncService {
         // GitHub API returns file info
         final fileInfo = json.decode(response.body);
         final fileSize = fileInfo['size'] as int;
-        print('📊 File size: $fileSize bytes');
+        AppLogger.d('📊 File size: $fileSize bytes');
         
         String jsonString;
         
         // For files larger than 1MB, GitHub doesn't return content directly
         if (fileSize > 1024 * 1024) {
-          print('📊 File is large ($fileSize bytes), using download URL...');
+          AppLogger.d('📊 File is large ($fileSize bytes), using download URL...');
           final downloadUrl = fileInfo['download_url'] as String;
-          print('📊 Download URL: $downloadUrl');
+          AppLogger.d('📊 Download URL: $downloadUrl');
           
           // Fetch the actual file content using download URL
           final downloadResponse = await http.get(
@@ -99,7 +99,7 @@ class TeamSyncService {
           
           if (downloadResponse.statusCode == 200) {
             jsonString = downloadResponse.body;
-            print('📊 Downloaded content length: ${jsonString.length}');
+            AppLogger.d('📊 Downloaded content length: ${jsonString.length}');
           } else {
             throw Exception('Failed to download file: ${downloadResponse.statusCode}');
           }
@@ -113,7 +113,7 @@ class TeamSyncService {
         final teamData = json.decode(jsonString);
         final teamCount = teamData['teams']?.length ?? 0;
 
-        print('📊 Parsed team data: $teamCount teams');
+        AppLogger.d('📊 Parsed team data: $teamCount teams');
 
         _downloadStatus = 'Saving to local storage...';
         _downloadProgress = 0.9;
@@ -135,32 +135,32 @@ class TeamSyncService {
             },
           );
         } catch (e) {
-          print('⚠️ Search engine initialization failed: $e');
+          AppLogger.d('⚠️ Search engine initialization failed: $e');
           // Continue anyway - the data is saved, search will work on next app restart
         }
 
         _downloadStatus = 'Complete!';
         _downloadProgress = 1.0;
         
-        print('✅ Team list synced successfully: $teamCount teams');
+        AppLogger.d('✅ Team list synced successfully: $teamCount teams');
         return true;
       } else if (response.statusCode == 404) {
         _downloadStatus = 'Team list not found';
         _downloadProgress = 0.0;
-        print('⚠️ Team list not found yet. GitHub Action may not have run yet.');
-        print('🔍 URL: $_teamListUrl');
+        AppLogger.d('⚠️ Team list not found yet. GitHub Action may not have run yet.');
+        AppLogger.d('🔍 URL: $_teamListUrl');
         return false;
       } else {
         _downloadStatus = 'Download failed';
         _downloadProgress = 0.0;
-        print('❌ Failed to sync team list: ${response.statusCode}');
-        print('📄 Response body: ${response.body.substring(0, response.body.length.clamp(0, 500))}');
+        AppLogger.d('❌ Failed to sync team list: ${response.statusCode}');
+        AppLogger.d('📄 Response body: ${response.body.substring(0, response.body.length.clamp(0, 500))}');
         return false;
       }
     } catch (e) {
       _downloadStatus = 'Error: $e';
       _downloadProgress = 0.0;
-      print('❌ Error syncing team list: $e');
+      AppLogger.d('❌ Error syncing team list: $e');
       return false;
     }
   }
@@ -178,7 +178,7 @@ class TeamSyncService {
       
       return [];
     } catch (e) {
-      print('Error getting cached team list: $e');
+      AppLogger.d('Error getting cached team list: $e');
       return [];
     }
   }
@@ -256,9 +256,9 @@ class TeamSyncService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_teamListKey);
       await prefs.remove(_lastSyncKey);
-      print('🗑️ Team list cache cleared');
+      AppLogger.d('🗑️ Team list cache cleared');
     } catch (e) {
-      print('Error clearing cache: $e');
+      AppLogger.d('Error clearing cache: $e');
     }
   }
   

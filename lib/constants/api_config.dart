@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
+import '../utils/logger.dart';
 
 class ApiConfig {
   // RobotEvents API Configuration
@@ -28,7 +29,7 @@ class ApiConfig {
   static String get randomApiKey {
     final selectedKey = robotEventsApiKeys[_random.nextInt(robotEventsApiKeys.length)];
     final keyIndex = robotEventsApiKeys.indexOf(selectedKey) + 1;
-    print('🔑 Using API Key #$keyIndex/${robotEventsApiKeys.length} for request');
+    AppLogger.d('🔑 Using API Key #$keyIndex/${robotEventsApiKeys.length} for request');
     return selectedKey;
   }
   
@@ -89,7 +90,7 @@ class ApiConfig {
   
   // Generate season ID map from API (matches Swift implementation)
   static Future<void> generateSeasonIdMap() async {
-    print('=== Generating Season ID Map ===');
+    AppLogger.d('=== Generating Season ID Map ===');
     try {
       final response = await http.get(
         Uri.parse('$robotEventsBaseUrl/seasons/'),
@@ -143,12 +144,12 @@ class ApiConfig {
           }
         }
         
-        print('Successfully loaded ${seasonIdMap[2]!.length} VEX IQ seasons');
-        print('Current VEX IQ season ID: $currentVexIQSeasonId');
-        print('=== End Season ID Map Generation ===');
+        AppLogger.d('Successfully loaded ${seasonIdMap[2]!.length} VEX IQ seasons');
+        AppLogger.d('Current VEX IQ season ID: $currentVexIQSeasonId');
+        AppLogger.d('=== End Season ID Map Generation ===');
       }
     } catch (e) {
-      print('Error generating season ID map: $e');
+      AppLogger.d('Error generating season ID map: $e');
     }
   }
   
@@ -196,7 +197,7 @@ class ApiConfig {
     int page = 1,
   }) {
     final selectedSeasonId = seasonId ?? getSelectedSeasonId();
-    print('🔍 Building event search params with season ID: $selectedSeasonId (passed: $seasonId, default: ${getSelectedSeasonId()})');
+    AppLogger.d('🔍 Building event search params with season ID: $selectedSeasonId (passed: $seasonId, default: ${getSelectedSeasonId()})');
     
     final params = <String, dynamic>{
       'page': page,
@@ -217,7 +218,7 @@ class ApiConfig {
       params['level[]'] = mapDisplayLevelsToApi(levels);
     }
     
-    print('🔍 Final event search params: $params');
+    AppLogger.d('🔍 Final event search params: $params');
     return params;
   }
   

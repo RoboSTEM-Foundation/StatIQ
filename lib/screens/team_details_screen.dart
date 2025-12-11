@@ -60,11 +60,11 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
       // Only reload if data is already loaded (to avoid double-loading on initial tab selection)
       if (_tabController.index == 2 && !_isLoadingAwards) {
         // Awards tab - reload awards
-        print('🔄 Reloading awards for tab selection');
+        AppLogger.d('🔄 Reloading awards for tab selection');
         _loadTeamAwards();
       } else if (_tabController.index == 3 && !_isLoadingCompetitionData) {
         // Matches tab - reload matches
-        print('🔄 Reloading matches for tab selection');
+        AppLogger.d('🔄 Reloading matches for tab selection');
         _loadCompetitionData();
       }
     }
@@ -121,19 +121,19 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
     // If team ID is 0 or invalid, try to find the team by number first
     if (widget.team.id == 0 && widget.team.number.isNotEmpty) {
       try {
-        print('🔍 Team ID is 0, searching for team by number: ${widget.team.number}');
+        AppLogger.d('🔍 Team ID is 0, searching for team by number: ${widget.team.number}');
         final searchResults = await RobotEventsAPI.searchTeams(teamNumber: widget.team.number);
         if (searchResults.isNotEmpty) {
           final foundTeam = searchResults.first;
-          print('✅ Found team with ID: ${foundTeam.id}');
+          AppLogger.d('✅ Found team with ID: ${foundTeam.id}');
           // Use the found team with proper ID
           _currentTeam = foundTeam;
         } else {
-          print('⚠️ No team found with number: ${widget.team.number}');
+          AppLogger.d('⚠️ No team found with number: ${widget.team.number}');
           _currentTeam = widget.team;
         }
       } catch (e) {
-        print('❌ Error searching for team: $e');
+        AppLogger.d('❌ Error searching for team: $e');
         _currentTeam = widget.team;
       }
     } else {
@@ -162,7 +162,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         });
       }
     } catch (e) {
-      print('Error loading team events: $e');
+      AppLogger.d('Error loading team events: $e');
       if (mounted) {
         setState(() {
           _isLoadingEvents = false;
@@ -174,7 +174,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   Future<void> _loadTeamAwards() async {
     // Always fetch fresh awards data (no caching)
     final teamId = _currentTeam?.id ?? widget.team.id;
-    print('📋 Loading awards for team ID: $teamId, season: $_selectedSeasonId');
+    AppLogger.d('📋 Loading awards for team ID: $teamId, season: $_selectedSeasonId');
     
     setState(() {
       _isLoadingAwards = true;
@@ -185,7 +185,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         teamId: teamId,
         seasonId: _selectedSeasonId,
       );
-      print('✅ Loaded ${awards.length} awards for team $teamId');
+      AppLogger.d('✅ Loaded ${awards.length} awards for team $teamId');
       if (mounted) {
         setState(() {
           _teamAwards = awards;
@@ -193,7 +193,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         });
       }
     } catch (e) {
-      print('❌ Error loading team awards: $e');
+      AppLogger.d('❌ Error loading team awards: $e');
       if (mounted) {
         setState(() {
           _teamAwards = []; // Clear on error
@@ -206,7 +206,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
   Future<void> _loadCompetitionData() async {
     // Always fetch fresh matches data (no caching)
     final teamId = _currentTeam?.id ?? widget.team.id;
-    print('🏆 Loading matches for team ID: $teamId, season: $_selectedSeasonId');
+    AppLogger.d('🏆 Loading matches for team ID: $teamId, season: $_selectedSeasonId');
     
     setState(() {
       _isLoadingCompetitionData = true;
@@ -214,7 +214,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
     
     try {
       if (_currentTeam == null && widget.team.id == 0) {
-        print('⚠️ No valid team ID available');
+        AppLogger.d('⚠️ No valid team ID available');
         if (mounted) {
           setState(() {
             _teamMatches = [];
@@ -232,7 +232,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         eventIds: widget.eventId != null ? [widget.eventId!] : null, // Filter by event if provided, null means all events
       );
 
-      print('📊 API returned ${matchesData.length} match records');
+      AppLogger.d('📊 API returned ${matchesData.length} match records');
 
       final allMatches = <Match>[];
       for (final matchData in matchesData) {
@@ -240,12 +240,12 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           final match = Match.fromJson(matchData as Map<String, dynamic>);
           allMatches.add(match);
         } catch (e) {
-          print('❌ Error parsing match data: $e');
-          print('   Match data: $matchData');
+          AppLogger.d('❌ Error parsing match data: $e');
+          AppLogger.d('   Match data: $matchData');
         }
       }
 
-      print('✅ Parsed ${allMatches.length} matches successfully');
+      AppLogger.d('✅ Parsed ${allMatches.length} matches successfully');
 
       // Sort matches by scheduled time (earliest first)
       allMatches.sort((a, b) {
@@ -261,7 +261,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
         try {
           await _scheduleNotifications(allMatches);
         } catch (e) {
-          print('⚠️  Warning: Could not schedule notifications: $e');
+          AppLogger.d('⚠️  Warning: Could not schedule notifications: $e');
           // Continue loading matches even if notification scheduling fails
         }
       }
@@ -271,11 +271,11 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           _teamMatches = allMatches;
           _isLoadingCompetitionData = false;
         });
-        print('✅ Set ${_teamMatches.length} matches in state');
+        AppLogger.d('✅ Set ${_teamMatches.length} matches in state');
       }
     } catch (e) {
-      print('❌ Error loading competition data: $e');
-      print('   Stack trace: ${StackTrace.current}');
+      AppLogger.d('❌ Error loading competition data: $e');
+      AppLogger.d('   Stack trace: ${StackTrace.current}');
       if (mounted) {
         setState(() {
           _teamMatches = []; // Clear on error
@@ -1452,7 +1452,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
       return match.scheduled != null && match.scheduled!.isAfter(now);
     }).toList();
     
-    print('📱 Scheduling notifications for ${futureMatches.length} future matches');
+    AppLogger.d('📱 Scheduling notifications for ${futureMatches.length} future matches');
     
     // Cancel all existing notifications first
     await NotificationService().cancelAllMatchNotifications();
@@ -1479,10 +1479,10 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
           teamNumber: currentTeamNumber,
         );
       } catch (e) {
-        print('❌ Error scheduling notification for match ${match.id}: $e');
+        AppLogger.d('❌ Error scheduling notification for match ${match.id}: $e');
       }
     }
     
-    print('✅ Scheduled ${futureMatches.length} notifications');
+    AppLogger.d('✅ Scheduled ${futureMatches.length} notifications');
   }
 } 

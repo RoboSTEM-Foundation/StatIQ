@@ -47,8 +47,8 @@ class Event {
         level: json['level'] as String? ?? '',
       );
     } catch (e) {
-      print('Error parsing Event JSON: $e');
-      print('JSON data: $json');
+      AppLogger.d('Error parsing Event JSON: $e');
+      AppLogger.d('JSON data: $json');
       rethrow;
     }
   }

@@ -14,6 +14,7 @@ import 'package:stat_iq/widgets/vex_iq_score_card.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:stat_iq/screens/settings_screen.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
+import 'package:stat_iq/utils/logger.dart';
 import 'package:stat_iq/widgets/optimized_team_search_widget.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -96,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
             teams.add(team);
           }
         } catch (e) {
-          print('Error loading team $teamNumber: $e');
+          AppLogger.d('Error loading team $teamNumber: $e');
         }
       }
       
@@ -109,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
             events.add(Event.fromJson(eventData));
           }
         } catch (e) {
-          print('Error loading event $eventSku: $e');
+          AppLogger.d('Error loading event $eventSku: $e');
         }
       }
       
@@ -118,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _recentEvents = events;
       });
     } catch (e) {
-      print('Error loading favorites: $e');
+      AppLogger.d('Error loading favorites: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -386,6 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final tierColorHex = teamTier != null ? SpecialTeamsService.instance.getTierColor(teamTier) : null;
         final tierColor = tierColorHex != null ? Color(int.parse(tierColorHex.replaceAll('#', ''), radix: 16) + 0xFF000000) : null;
         
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.spacingM),
       elevation: AppConstants.elevationS,
@@ -397,7 +399,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ) : BorderSide.none,
       ),
           color: (isMyTeam || tierColor != null) 
-              ? (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1) 
+              ? (isDark 
+                  ? (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.2)
+                  : (tierColor ?? AppConstants.vexIQBlue).withOpacity(0.1))
               : null,
       child: InkWell(
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
@@ -592,15 +596,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(AppConstants.spacingM),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: isDark 
+              ? color.withOpacity(0.2)
+              : color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(AppConstants.borderRadiusL),
           border: Border.all(
-            color: color.withOpacity(0.3),
+            color: isDark
+                ? color.withOpacity(0.4)
+                : color.withOpacity(0.3),
             width: 1,
           ),
         ),
@@ -661,7 +670,7 @@ class _TeamDetailsBottomSheetState extends State<_TeamDetailsBottomSheet> {
         _teamAwards = awards;
       });
     } catch (e) {
-      print('Error loading team data: $e');
+      AppLogger.d('Error loading team data: $e');
     } finally {
       setState(() {
         _isLoading = false;

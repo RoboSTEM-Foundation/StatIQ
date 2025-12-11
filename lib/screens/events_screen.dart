@@ -8,6 +8,7 @@ import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
 import 'package:stat_iq/utils/date_utils_us.dart';
+import 'package:stat_iq/utils/logger.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
 import 'package:stat_iq/screens/region_select_screen.dart';
 import 'package:stat_iq/screens/season_select_screen.dart';
@@ -357,11 +358,11 @@ class _EventsScreenState extends State<EventsScreen> {
                            queryLower.contains('full volume') ||
                            queryLower.contains('mix & match');
       
-      print('🔍 Events Screen: Query contains season info: $hasSeasonInfo');
-      print('🔍 Events Screen: Selected season ID: $_selectedSeasonId');
-      print('🔍 Events Screen: Query: "$query" (length: ${query.trim().length})');
-      print('🔍 Events Screen: Will pass seasonId: ${hasSeasonInfo ? null : _selectedSeasonId}');
-      print('🔍 Events Screen: Making API call to confirm results...');
+      AppLogger.d('🔍 Events Screen: Query contains season info: $hasSeasonInfo');
+      AppLogger.d('🔍 Events Screen: Selected season ID: $_selectedSeasonId');
+      AppLogger.d('🔍 Events Screen: Query: "$query" (length: ${query.trim().length})');
+      AppLogger.d('🔍 Events Screen: Will pass seasonId: ${hasSeasonInfo ? null : _selectedSeasonId}');
+      AppLogger.d('🔍 Events Screen: Making API call to confirm results...');
       
       // Always make API call for non-empty queries to confirm results
       final events = await RobotEventsAPI.searchEvents(
@@ -372,9 +373,9 @@ class _EventsScreenState extends State<EventsScreen> {
         toDate: _dateRangeEnd,
       );
       
-      print('🔍 Events Screen: Found ${events.length} events');
+      AppLogger.d('🔍 Events Screen: Found ${events.length} events');
       if (events.isNotEmpty) {
-        print('🔍 Events Screen: First event: ${events.first.name}');
+        AppLogger.d('🔍 Events Screen: First event: ${events.first.name}');
       }
 
       // Apply only client-side filters that can't be done via API
@@ -382,13 +383,13 @@ class _EventsScreenState extends State<EventsScreen> {
 
       // If no events found, try additional searches to confirm no results exist
       if (filteredEvents.isEmpty && query.trim().isNotEmpty) {
-        print('🔍 No events found, trying additional search confirmations...');
+        AppLogger.d('🔍 No events found, trying additional search confirmations...');
         
         // Try team search fallback
         try {
-          print('🔍 Trying exact team search for: "${query.trim()}"');
+          AppLogger.d('🔍 Trying exact team search for: "${query.trim()}"');
           final teams = await RobotEventsAPI.searchTeams(teamNumber: query.trim());
-          print('🔍 Exact team search found ${teams.length} teams');
+          AppLogger.d('🔍 Exact team search found ${teams.length} teams');
           
           if (teams.isNotEmpty) {
             // If teams are found, show a message suggesting to search for teams instead
@@ -403,9 +404,9 @@ class _EventsScreenState extends State<EventsScreen> {
           
           // Try searching without season filter for teams
           if (query.trim().length > 1) {
-            print('🔍 Trying team search without season filter for: "${query.trim()}"');
+            AppLogger.d('🔍 Trying team search without season filter for: "${query.trim()}"');
             final teamsNoSeason = await RobotEventsAPI.searchTeams(teamNumber: query.trim(), seasonId: null);
-            print('🔍 Team search without season found ${teamsNoSeason.length} teams');
+            AppLogger.d('🔍 Team search without season found ${teamsNoSeason.length} teams');
             
             if (teamsNoSeason.isNotEmpty) {
               setState(() {
@@ -418,18 +419,18 @@ class _EventsScreenState extends State<EventsScreen> {
             }
           }
         } catch (e) {
-          print('🔍 Team search fallback failed: $e');
+          AppLogger.d('🔍 Team search fallback failed: $e');
         }
         
         // Try a broader event search without filters to confirm no results exist
         try {
-          print('🔍 Trying broader event search without filters...');
+          AppLogger.d('🔍 Trying broader event search without filters...');
           final broaderEvents = await RobotEventsAPI.searchEvents(
             query: query.trim(),
             seasonId: null, // Try without season filter
             levels: _selectedEventLevels.isNotEmpty ? _selectedEventLevels : null,
           );
-          print('🔍 Broader search found ${broaderEvents.length} events');
+          AppLogger.d('🔍 Broader search found ${broaderEvents.length} events');
           
           if (broaderEvents.isNotEmpty) {
             // If broader search found events, it means filters are too restrictive
@@ -442,7 +443,7 @@ class _EventsScreenState extends State<EventsScreen> {
             return;
           }
         } catch (e) {
-          print('🔍 Broader search failed: $e');
+          AppLogger.d('🔍 Broader search failed: $e');
         }
       }
 
@@ -708,13 +709,13 @@ class _EventsScreenState extends State<EventsScreen> {
                       const SizedBox(width: AppConstants.spacingS),
                       ElevatedButton.icon(
                         onPressed: () {
-                          print('🔍 Events Check Again button pressed! Search text: "${_searchController.text}"');
+                          AppLogger.d('🔍 Events Check Again button pressed! Search text: "${_searchController.text}"');
                           // If search text is empty, reload recent events, otherwise search again
                           if (_searchController.text.trim().isEmpty) {
-                            print('🔍 Loading recent events...');
+                            AppLogger.d('🔍 Loading recent events...');
                             _loadRecentEvents();
                           } else {
-                            print('🔍 Searching events again...');
+                            AppLogger.d('🔍 Searching events again...');
                             _searchEvents(_searchController.text);
                           }
                         },

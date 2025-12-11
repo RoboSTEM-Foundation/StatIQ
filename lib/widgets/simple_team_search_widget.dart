@@ -59,7 +59,7 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
     try {
       if (widget.useAPI) {
         // When using API, we don't need to initialize cached data
-        print('📱 Using API search mode');
+        AppLogger.d('📱 Using API search mode');
         setState(() {
           _hasData = true;
           _isLoading = false;
@@ -71,7 +71,7 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
       if (mounted) {
         final hasData = SimpleTeamSearch.isReady();
         final teamCount = SimpleTeamSearch.getTeamCount();
-        print('📱 Search initialized: hasData=$hasData, teamCount=$teamCount');
+        AppLogger.d('📱 Search initialized: hasData=$hasData, teamCount=$teamCount');
         
         setState(() {
           _hasData = hasData;
@@ -83,7 +83,7 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
         }
       }
     } catch (e) {
-      print('❌ Error loading search data: $e');
+      AppLogger.d('❌ Error loading search data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -101,7 +101,7 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
 
   void _performSearch(String query) {
     if (!_hasData) {
-      print('❌ No data available for search');
+      AppLogger.d('❌ No data available for search');
       return;
     }
     
@@ -117,11 +117,11 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
     if (query.trim().isEmpty) {
       // Show first 20 teams when no search
       _searchResults = SimpleTeamSearch.getFirstTeams(20);
-      print('📱 Showing first 20 teams: ${_searchResults.length} results');
+      AppLogger.d('📱 Showing first 20 teams: ${_searchResults.length} results');
     } else {
       // Search by team number (fastest)
       _searchResults = SimpleTeamSearch.searchByNumber(query, limit: 50);
-      print('🔍 Search for "$query": ${_searchResults.length} results');
+      AppLogger.d('🔍 Search for "$query": ${_searchResults.length} results');
     }
     
     setState(() {
@@ -148,7 +148,7 @@ class _SimpleTeamSearchWidgetState extends State<SimpleTeamSearchWidget> {
         });
       }
     } catch (e) {
-      print('❌ API search error: $e');
+      AppLogger.d('❌ API search error: $e');
       if (mounted) {
         setState(() {
           _searchResults = [];

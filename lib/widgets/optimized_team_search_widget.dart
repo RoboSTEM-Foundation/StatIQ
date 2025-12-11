@@ -71,7 +71,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       // Check if we need to download data first
       final needsSync = await TeamSyncService.needsSync();
       if (needsSync) {
-        print('📥 Team data needs sync, downloading...');
+        AppLogger.d('📥 Team data needs sync, downloading...');
         await TeamSyncService.syncTeamList();
       }
       
@@ -81,15 +81,15 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       if (mounted) {
         final hasData = OptimizedTeamSearch.isReady();
         final teamCount = OptimizedTeamSearch.getTeamCount();
-        print('🚀 Optimized search initialized: hasData=$hasData, teamCount=$teamCount');
-        print('🚀 Setting _hasData to: $hasData');
+        AppLogger.d('🚀 Optimized search initialized: hasData=$hasData, teamCount=$teamCount');
+        AppLogger.d('🚀 Setting _hasData to: $hasData');
         
         setState(() {
           _hasData = hasData;
           _isLoading = false;
         });
         
-        print('🚀 After setState: _hasData=$_hasData, _isLoading=$_isLoading');
+        AppLogger.d('🚀 After setState: _hasData=$_hasData, _isLoading=$_isLoading');
         
         // Start progress timer if not ready yet
         if (!hasData) {
@@ -100,7 +100,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
         _performSearch('');
       }
     } catch (e) {
-      print('❌ Error loading optimized search: $e');
+      AppLogger.d('❌ Error loading optimized search: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -128,14 +128,14 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
     _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (mounted) {
         final isReady = OptimizedTeamSearch.isReady();
-        print('🔄 Progress timer: isReady=$isReady, _hasData=$_hasData');
+        AppLogger.d('🔄 Progress timer: isReady=$isReady, _hasData=$_hasData');
         if (isReady) {
           timer.cancel();
-          print('🔄 Setting _hasData to true in progress timer');
+          AppLogger.d('🔄 Setting _hasData to true in progress timer');
           setState(() {
             _hasData = true;
           });
-          print('🔄 After setState in timer: _hasData=$_hasData');
+          AppLogger.d('🔄 After setState in timer: _hasData=$_hasData');
         } else {
           setState(() {
             // Trigger rebuild to update progress (both download and indexing)
@@ -148,12 +148,12 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
   }
 
   void _performSearch(String query) {
-    print('🔍 _performSearch called with query: "$query"');
-    print('🔍 _hasData: $_hasData');
-    print('🔍 OptimizedTeamSearch.isReady(): ${OptimizedTeamSearch.isReady()}');
+    AppLogger.d('🔍 _performSearch called with query: "$query"');
+    AppLogger.d('🔍 _hasData: $_hasData');
+    AppLogger.d('🔍 OptimizedTeamSearch.isReady(): ${OptimizedTeamSearch.isReady()}');
     
     if (!_hasData) {
-      print('❌ No data available for search');
+      AppLogger.d('❌ No data available for search');
       return;
     }
     
@@ -166,11 +166,11 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
 
     // Get first page of results
     final results = OptimizedTeamSearch.search(query, page: 0);
-    print('🔍 Search results for "$query": ${results.length} teams');
+    AppLogger.d('🔍 Search results for "$query": ${results.length} teams');
     if (results.isNotEmpty) {
-      print('🔍 First result: ${results[0]}');
+      AppLogger.d('🔍 First result: ${results[0]}');
     } else {
-      print('🔍 No results found for query: "$query"');
+      AppLogger.d('🔍 No results found for query: "$query"');
     }
     
     setState(() {
@@ -178,10 +178,10 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       _isSearching = false;
       _hasMoreResults = results.length >= 50; // Assuming page size is 50
     });
-    print('🔍 _currentResults length after setState: ${_currentResults.length}');
-    print('🔍 _currentResults content: $_currentResults');
+    AppLogger.d('🔍 _currentResults length after setState: ${_currentResults.length}');
+    AppLogger.d('🔍 _currentResults content: $_currentResults');
     
-    print('🔍 Search for "$query": ${results.length} results (page 0)');
+    AppLogger.d('🔍 Search for "$query": ${results.length} results (page 0)');
   }
 
   void _loadMoreResults() {
@@ -201,7 +201,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       _hasMoreResults = moreResults.length >= 50; // Assuming page size is 50
     });
     
-    print('📄 Loaded page $_currentPage: ${moreResults.length} more results');
+    AppLogger.d('📄 Loaded page $_currentPage: ${moreResults.length} more results');
   }
 
   Future<void> _refreshTeamList() async {
@@ -249,7 +249,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
 
   @override
   Widget build(BuildContext context) {
-    print('🔍 OptimizedTeamSearchWidget build() called - _currentResults.length=${_currentResults.length}');
+    AppLogger.d('🔍 OptimizedTeamSearchWidget build() called - _currentResults.length=${_currentResults.length}');
     return SafeArea(
       child: Column(
         children: [
@@ -376,7 +376,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
   }
 
   Widget _buildSearchResults() {
-    print('🔍 _buildSearchResults: _isLoading=$_isLoading, _hasData=$_hasData, _currentResults.length=${_currentResults.length}');
+    AppLogger.d('🔍 _buildSearchResults: _isLoading=$_isLoading, _hasData=$_hasData, _currentResults.length=${_currentResults.length}');
     
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -409,17 +409,17 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       }
     }
 
-    print('🔍 Empty state check: _currentResults.isEmpty=${_currentResults.isEmpty}, _searchController.text.isNotEmpty=${_searchController.text.isNotEmpty}, searchText="${_searchController.text}"');
+    AppLogger.d('🔍 Empty state check: _currentResults.isEmpty=${_currentResults.isEmpty}, _searchController.text.isNotEmpty=${_searchController.text.isNotEmpty}, searchText="${_searchController.text}"');
 
     if (_currentResults.isEmpty && _searchController.text.isNotEmpty) {
-      print('🔍 Showing Check Again button for query: "${_searchController.text}"');
+      AppLogger.d('🔍 Showing Check Again button for query: "${_searchController.text}"');
       return _buildEmptyState(
         icon: Icons.search_off,
         title: 'No Teams Found',
         message: 'Try a different team number or check the spelling.',
         actionButton: ElevatedButton.icon(
           onPressed: () {
-            print('🔍 Check Again button pressed! Search text: "${_searchController.text}"');
+            AppLogger.d('🔍 Check Again button pressed! Search text: "${_searchController.text}"');
             _performSearch(_searchController.text);
           },
           icon: const Icon(Icons.search),
@@ -445,11 +445,11 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       itemCount: _currentResults.length + (_hasMoreResults ? 1 : 0),
       itemBuilder: (context, index) {
-        print('🔍 itemBuilder called: index=$index, _currentResults.length=${_currentResults.length}');
+        AppLogger.d('🔍 itemBuilder called: index=$index, _currentResults.length=${_currentResults.length}');
         
         if (index == _currentResults.length) {
           // Load more button
-          print('🔍 Building load more button');
+          AppLogger.d('🔍 Building load more button');
           return Padding(
             padding: const EdgeInsets.all(AppConstants.spacingM),
             child: Center(
@@ -464,7 +464,7 @@ class _OptimizedTeamSearchWidgetState extends State<OptimizedTeamSearchWidget> {
         }
 
         final teamData = _currentResults[index];
-        print('🔍 Building team card for index $index: ${teamData['number']} - ${teamData['name']}');
+        AppLogger.d('🔍 Building team card for index $index: ${teamData['number']} - ${teamData['name']}');
         final team = Team(
           id: teamData['id'] ?? 0,
           number: teamData['number'] ?? '',

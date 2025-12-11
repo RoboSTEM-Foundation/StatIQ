@@ -10,7 +10,7 @@ class VexDBAPI {
     int? seasonId,
   }) async {
     try {
-      print('=== VexDB Skills Lookup for $teamNumber ===');
+      AppLogger.d('=== VexDB Skills Lookup for $teamNumber ===');
       
       // VexDB skills endpoint: GET /v1/skills?program=VIQRC&team={number}
       final params = <String, String>{
@@ -28,10 +28,10 @@ class VexDBAPI {
       }
       
       final uri = Uri.parse('$baseUrl/skills').replace(queryParameters: params);
-      print('VexDB API Request: $uri');
+      AppLogger.d('VexDB API Request: $uri');
       
       final response = await http.get(uri);
-      print('VexDB Response Status: ${response.statusCode}');
+      AppLogger.d('VexDB Response Status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -40,19 +40,19 @@ class VexDBAPI {
         if (results != null && results.isNotEmpty) {
           // Return the best skills score for this team
           final skillsData = results.first as Map<String, dynamic>;
-          print('Found VexDB skills data: $skillsData');
+          AppLogger.d('Found VexDB skills data: $skillsData');
           return skillsData;
         } else {
-          print('No VexDB skills data found for team $teamNumber');
+          AppLogger.d('No VexDB skills data found for team $teamNumber');
         }
       } else {
-        print('VexDB API error: ${response.statusCode} - ${response.body}');
+        AppLogger.d('VexDB API error: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      print('Error fetching VexDB skills data: $e');
+      AppLogger.d('Error fetching VexDB skills data: $e');
     }
     
-    print('=== End VexDB Skills Lookup ===');
+    AppLogger.d('=== End VexDB Skills Lookup ===');
     return null;
   }
   
@@ -63,7 +63,7 @@ class VexDBAPI {
     int limit = 1000,
   }) async {
     try {
-      print('=== VexDB World Skills Rankings ===');
+      AppLogger.d('=== VexDB World Skills Rankings ===');
       
       final params = <String, String>{
         'program': program,
@@ -75,25 +75,25 @@ class VexDBAPI {
       }
       
       final uri = Uri.parse('$baseUrl/skills').replace(queryParameters: params);
-      print('VexDB World Rankings Request: $uri');
+      AppLogger.d('VexDB World Rankings Request: $uri');
       
       final response = await http.get(uri);
-      print('VexDB World Rankings Status: ${response.statusCode}');
+      AppLogger.d('VexDB World Rankings Status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final results = data['result'] as List<dynamic>? ?? [];
         
-        print('Found ${results.length} world skills entries');
+        AppLogger.d('Found ${results.length} world skills entries');
         return results.cast<Map<String, dynamic>>();
       } else {
-        print('VexDB World Rankings error: ${response.statusCode}');
+        AppLogger.d('VexDB World Rankings error: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error fetching VexDB world rankings: $e');
+      AppLogger.d('Error fetching VexDB world rankings: $e');
     }
     
-    print('=== End VexDB World Skills Rankings ===');
+    AppLogger.d('=== End VexDB World Skills Rankings ===');
     return [];
   }
   
@@ -120,11 +120,11 @@ class VexDBAPI {
       
       // Calculate percentile
       final percentile = (teamsBeaten / worldRankings.length) * 100;
-      print('Team score $teamScore beats $teamsBeaten/${worldRankings.length} teams = ${percentile.toStringAsFixed(1)}%');
+      AppLogger.d('Team score $teamScore beats $teamsBeaten/${worldRankings.length} teams = ${percentile.toStringAsFixed(1)}%');
       
       return percentile;
     } catch (e) {
-      print('Error calculating skills percentile: $e');
+      AppLogger.d('Error calculating skills percentile: $e');
       return 0.0;
     }
   }

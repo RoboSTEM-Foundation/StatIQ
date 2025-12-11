@@ -41,7 +41,7 @@ class Team {
       final location = json['location'] as Map<String, dynamic>? ?? {};
       
       final teamNumber = json['number'] as String? ?? json['team'] as String? ?? '';
-      print('🔍 Team.fromJson Debug: json["number"] = ${json['number']}, json["team"] = ${json['team']}, final number = "$teamNumber"');
+      AppLogger.d('🔍 Team.fromJson Debug: json["number"] = ${json['number']}, json["team"] = ${json['team']}, final number = "$teamNumber"');
       
       return Team(
         id: json['id'] as int? ?? 0,
@@ -63,8 +63,8 @@ class Team {
             .toList() ?? [],
       );
     } catch (e) {
-      print('Error parsing Team: $e');
-      print('JSON: $json');
+      AppLogger.d('Error parsing Team: $e');
+      AppLogger.d('JSON: $json');
       // Return a basic team with available info
       return Team(
         id: json['id'] as int? ?? 0,

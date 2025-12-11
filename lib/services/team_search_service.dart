@@ -16,7 +16,7 @@ class TeamSearchService {
   static Future<void> initializeSearchIndexes() async {
     // Try to load cached indexes first (fastest)
     if (await _loadCachedIndexes()) {
-      print('🔍 Loaded cached search indexes');
+      AppLogger.d('🔍 Loaded cached search indexes');
       return;
     }
     
@@ -31,7 +31,7 @@ class TeamSearchService {
       
       // Build indexes in background
       await _buildSearchIndexesAsync();
-      print('🔍 Search indexes built for ${_allTeams.length} teams');
+      AppLogger.d('🔍 Search indexes built for ${_allTeams.length} teams');
     }
   }
   
@@ -143,10 +143,10 @@ class TeamSearchService {
           (indexData['locationIndex'] as Map).map((k, v) => MapEntry(k.toString(), List<int>.from(v)))
         );
         
-        print('🔍 Loaded cached search indexes');
+        AppLogger.d('🔍 Loaded cached search indexes');
         return true;
       } catch (e) {
-        print('❌ Error loading cached indexes: $e');
+        AppLogger.d('❌ Error loading cached indexes: $e');
         return false;
       }
     }

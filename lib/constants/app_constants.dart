@@ -137,7 +137,7 @@ class AppConstants {
   // API Constants
   static const String robotEventsBaseUrl = 'https://www.robotevents.com/api/v2';
   static const int vexIQProgramId = 41;
-  static const int defaultVEXIQSeasonId = 192;
+  static const int defaultVEXIQSeasonId = 196; // Mix & Match 2025-2026
   
   // App Strings
   static const String appName = 'statIQ';

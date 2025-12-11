@@ -59,7 +59,7 @@ class _FastTeamSearchWidgetState extends State<FastTeamSearchWidget> {
         _performSearch(_searchController.text);
       }
     } catch (e) {
-      print('Error loading search data: $e');
+      AppLogger.d('Error loading search data: $e');
     }
   }
 

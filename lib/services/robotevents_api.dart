@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import '../constants/api_config.dart';
 import '../models/team.dart';
 import '../models/event.dart';
+import '../utils/logger.dart';
 import 'dart:math' as math;
 
 class RobotEventsAPI {
@@ -25,7 +26,7 @@ class RobotEventsAPI {
       await ApiConfig.generateSeasonIdMap();
       return true;
     } catch (e) {
-      print('Error initializing API: $e');
+      AppLogger.d('Error initializing API: $e');
       return false;
     }
   }
@@ -71,19 +72,19 @@ class RobotEventsAPI {
         params: params,
       );
       
-      print('API Request: $uriWithParams');
+      AppLogger.d('API Request: $uriWithParams');
       
       final response = await http.get(
         uriWithParams,
         headers: ApiConfig.robotEventsHeaders,
       ).timeout(_requestTimeout);
       
-      print('API Response Status: ${response.statusCode}');
+      AppLogger.d('API Response Status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body);
         final data = jsonData['data'] as List<dynamic>;
-        print('API returned ${data.length} results');
+        AppLogger.d('API returned ${data.length} results');
         return data;
       } else if (response.statusCode == 401) {
         throw Exception('Unauthorized: Check your API key');
@@ -93,7 +94,7 @@ class RobotEventsAPI {
         throw Exception('API error: ${response.statusCode}');
       }
     } catch (e) {
-      print('robotevents_request error: $e');
+      AppLogger.d('robotevents_request error: $e');
       return [];
     }
   }
@@ -128,10 +129,10 @@ class RobotEventsAPI {
     int? teamId,
     int? seasonId,
   }) async {
-    print('=== Team Search Debug ===');
-    print('Team Number: $teamNumber');
-    print('Team ID: $teamId');
-    print('Season ID: $seasonId');
+    AppLogger.d('=== Team Search Debug ===');
+    AppLogger.d('Team Number: $teamNumber');
+    AppLogger.d('Team ID: $teamId');
+    AppLogger.d('Season ID: $seasonId');
     
     final params = ApiConfig.getTeamSearchParams(
       teamNumber: teamNumber,
@@ -139,18 +140,18 @@ class RobotEventsAPI {
       seasonId: seasonId,
     );
     
-    print('Search params: $params');
+    AppLogger.d('Search params: $params');
     
     final data = await roboteventsRequest(
       requestUrl: '/teams',
       params: params,
     );
     
-    print('Team lookup returned ${data.length} results for ${teamNumber?.isNotEmpty == true ? "number $teamNumber" : "ID $teamId"}');
+    AppLogger.d('Team lookup returned ${data.length} results for ${teamNumber?.isNotEmpty == true ? "number $teamNumber" : "ID $teamId"}');
     if (data.isNotEmpty) {
-      print('🔍 First team result: ${data.first}');
+      AppLogger.d('🔍 First team result: ${data.first}');
     } else {
-      print('🔍 No team results found for search: $params');
+      AppLogger.d('🔍 No team results found for search: $params');
     }
     
     final teams = <Team>[];
@@ -162,15 +163,15 @@ class RobotEventsAPI {
         final programId = teamData['program']?['id'] as int?;
         if (programId == ApiConfig.vexIQProgramId) {
           teams.add(team);
-          print('Added VEX IQ team: ${team.number} - ${team.name} (Grade: ${team.grade})');
+          AppLogger.d('Added VEX IQ team: ${team.number} - ${team.name} (Grade: ${team.grade})');
         }
       } catch (e) {
-        print('Error parsing team data: $e');
+        AppLogger.d('Error parsing team data: $e');
       }
     }
     
-    print('Filtered to ${teams.length} VEX IQ teams');
-    print('=== End Team Search Debug ===');
+    AppLogger.d('Filtered to ${teams.length} VEX IQ teams');
+    AppLogger.d('=== End Team Search Debug ===');
     
     return teams;
   }
@@ -180,9 +181,9 @@ class RobotEventsAPI {
     required int teamId,
     int? seasonId,
   }) async {
-    print('=== Team Events Debug ===');
-    print('Team ID: $teamId');
-    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    AppLogger.d('=== Team Events Debug ===');
+    AppLogger.d('Team ID: $teamId');
+    AppLogger.d('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
     
     final params = ApiConfig.getTeamEventsParams(
       teamId: teamId,
@@ -194,7 +195,7 @@ class RobotEventsAPI {
       params: params,
     );
     
-    print('Events API returned ${data.length} events');
+    AppLogger.d('Events API returned ${data.length} events');
     
     final events = <Event>[];
     for (final eventData in data) {
@@ -202,12 +203,12 @@ class RobotEventsAPI {
         final event = Event.fromJson(eventData);
         events.add(event);
     } catch (e) {
-        print('Error parsing event data: $e');
+        AppLogger.d('Error parsing event data: $e');
       }
     }
     
-    print('Total events loaded: ${events.length}');
-    print('=== End Team Events Debug ===');
+    AppLogger.d('Total events loaded: ${events.length}');
+    AppLogger.d('=== End Team Events Debug ===');
     
     return events;
   }
@@ -217,9 +218,9 @@ class RobotEventsAPI {
     required int teamId,
     int? seasonId,
   }) async {
-    print('=== Team Awards Debug ===');
-    print('Team ID: $teamId');
-    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    AppLogger.d('=== Team Awards Debug ===');
+    AppLogger.d('Team ID: $teamId');
+    AppLogger.d('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
     
     final params = ApiConfig.getTeamAwardsParams(
       teamId: teamId,
@@ -231,8 +232,8 @@ class RobotEventsAPI {
       params: params,
     );
     
-    print('Awards API returned ${data.length} awards');
-    print('=== End Team Awards Debug ===');
+    AppLogger.d('Awards API returned ${data.length} awards');
+    AppLogger.d('=== End Team Awards Debug ===');
     
     return data;
   }
@@ -242,9 +243,9 @@ class RobotEventsAPI {
     required int teamId,
     int? seasonId,
   }) async {
-    print('=== Team Rankings Debug ===');
-    print('Team ID: $teamId');
-    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    AppLogger.d('=== Team Rankings Debug ===');
+    AppLogger.d('Team ID: $teamId');
+    AppLogger.d('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
     
     final params = ApiConfig.getTeamRankingsParams(
       teamId: teamId,
@@ -256,8 +257,8 @@ class RobotEventsAPI {
       params: params,
     );
     
-    print('Rankings API returned ${data.length} ranking records');
-    print('=== End Team Rankings Debug ===');
+    AppLogger.d('Rankings API returned ${data.length} ranking records');
+    AppLogger.d('=== End Team Rankings Debug ===');
     
     return data;
   }
@@ -267,9 +268,9 @@ class RobotEventsAPI {
     required int teamId,
     int? seasonId,
   }) async {
-    print('=== Team Skills Debug ===');
-    print('Team ID: $teamId');
-    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    AppLogger.d('=== Team Skills Debug ===');
+    AppLogger.d('Team ID: $teamId');
+    AppLogger.d('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
     
     final targetSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
     
@@ -279,17 +280,17 @@ class RobotEventsAPI {
         'season': targetSeasonId,
       };
       
-      print('Trying /teams/$teamId/skills endpoint...');
+      AppLogger.d('Trying /teams/$teamId/skills endpoint...');
       final data = await roboteventsRequest(
         requestUrl: '/teams/$teamId/skills',
         params: params,
       );
       
-      print('Team Skills API returned ${data.length} records');
-      print('=== End Team Skills Debug ===');
+      AppLogger.d('Team Skills API returned ${data.length} records');
+      AppLogger.d('=== End Team Skills Debug ===');
       return data;
     } catch (e) {
-      print('Team skills endpoint failed: $e');
+      AppLogger.d('Team skills endpoint failed: $e');
   }
 
     // Fallback: Try general skills endpoint with team filter
@@ -300,21 +301,21 @@ class RobotEventsAPI {
         'program': ApiConfig.getSelectedProgramId(),
       };
       
-      print('Trying /skills endpoint with team filter...');
+      AppLogger.d('Trying /skills endpoint with team filter...');
       final data = await roboteventsRequest(
         requestUrl: '/skills',
         params: params,
       );
       
-      print('Skills API returned ${data.length} records');
-      print('=== End Team Skills Debug ===');
+      AppLogger.d('Skills API returned ${data.length} records');
+      AppLogger.d('=== End Team Skills Debug ===');
       return data;
     } catch (e) {
-      print('Skills endpoint failed: $e');
+      AppLogger.d('Skills endpoint failed: $e');
     }
     
-    print('No skills data available - returning empty list');
-    print('=== End Team Skills Debug ===');
+    AppLogger.d('No skills data available - returning empty list');
+    AppLogger.d('=== End Team Skills Debug ===');
     return [];
   }
   
@@ -324,7 +325,7 @@ class RobotEventsAPI {
     int page = 1,
     String gradeLevel = 'Middle School',
   }) async {
-    final effectiveSeasonId = seasonId ?? ApiConfig.currentVexIQSeasonId;
+    final effectiveSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
     
     // Map UI grade level names to API parameter values
     String apiGradeLevel = gradeLevel;
@@ -341,7 +342,7 @@ class RobotEventsAPI {
     
     final url = 'https://www.robotevents.com/api/seasons/$effectiveSeasonId/skills';
     
-    print('🌍 Loading world skills rankings for $apiGradeLevel (from $gradeLevel)');
+    AppLogger.d('🌍 Loading world skills rankings for $apiGradeLevel (from $gradeLevel)');
     
     try {
       final response = await http.get(
@@ -354,14 +355,14 @@ class RobotEventsAPI {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as List<dynamic>;
-        print('✅ Loaded ${data.length} world skills rankings for $apiGradeLevel');
+        AppLogger.d('✅ Loaded ${data.length} world skills rankings for $apiGradeLevel');
     return data;
       } else {
-        print('❌ Error loading skills rankings: ${response.statusCode}');
+        AppLogger.d('❌ Error loading skills rankings: ${response.statusCode}');
         return [];
       }
     } catch (e) {
-      print('❌ Error loading skills rankings: $e');
+      AppLogger.d('❌ Error loading skills rankings: $e');
       return [];
     }
   }
@@ -372,7 +373,7 @@ class RobotEventsAPI {
     bool includePostSeason = false,
     String? gradeLevel,
   }) {
-    final effectiveSeasonId = seasonId ?? ApiConfig.currentVexIQSeasonId;
+    final effectiveSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
     final params = <String, String>{};
     
     if (includePostSeason) {
@@ -396,7 +397,7 @@ class RobotEventsAPI {
     bool includePostSeason = false,
     String? gradeLevel,
   }) async {
-    final effectiveSeasonId = seasonId ?? ApiConfig.currentVexIQSeasonId;
+    final effectiveSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
     final params = <String, String>{};
     
     if (includePostSeason) {
@@ -475,23 +476,20 @@ class RobotEventsAPI {
     DateTime? fromDate,
     DateTime? toDate,
   }) async {
-    print('=== Event Search Debug ===');
-    print('Query: $query');
-    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
-    print('Level Class: $levelClass');
-    print('Page: $page');
+    AppLogger.d('=== Event Search Debug ===');
+    AppLogger.d('Query: $query');
+    AppLogger.d('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    AppLogger.d('Level Class: $levelClass');
+    AppLogger.d('Page: $page');
     
-    final apiLevels = levels != null && levels.isNotEmpty
-        ? ApiConfig.mapDisplayLevelsToApi(levels)
-        : levels;
-    
-    // If we have a search query, use the enhanced scraping method
-    if (query != null && query.trim().isNotEmpty) {
+    // If we have level filters, prefer API search over scraping for better filtering
+    // If we have a search query and no level filters, use the enhanced scraping method
+    if (query != null && query.trim().isNotEmpty && (levels == null || levels.isEmpty)) {
       return await searchEventsWithScraping(
         query: query,
         seasonId: seasonId,
         levelClass: levelClass,
-        levels: apiLevels,
+        levels: levels, // Pass display levels, will be mapped inside
         page: page,
         fromDate: fromDate,
         toDate: toDate,
@@ -503,7 +501,7 @@ class RobotEventsAPI {
       query: query,
       seasonId: seasonId,
       levelClass: levelClass,
-      levels: apiLevels,
+      levels: levels, // Pass display levels, will be mapped inside
       page: page,
     );
     
@@ -517,11 +515,11 @@ class RobotEventsAPI {
       try {
         events.add(Event.fromJson(eventData));
       } catch (e) {
-        print('Error parsing event: $e');
+        AppLogger.d('Error parsing event: $e');
       }
     }
     
-    print('Found ${events.length} events');
+    AppLogger.d('Found ${events.length} events');
     return events;
   }
   
@@ -530,8 +528,8 @@ class RobotEventsAPI {
   static Future<List<String>> roboteventsCompetitionScraper({
     Map<String, dynamic>? params,
   }) async {
-    print('=== Event SKU Scraper Debug ===');
-    print('Input params: $params');
+    AppLogger.d('=== Event SKU Scraper Debug ===');
+    AppLogger.d('Input params: $params');
     
     // Always use VEX IQ competition type for this app
     const competitionType = 'vex-iq-competition';
@@ -584,7 +582,7 @@ class RobotEventsAPI {
       });
     }
     
-    print('Scraping params: $scrapingParams');
+    AppLogger.d('Scraping params: $scrapingParams');
     
     // Build URL with all parameters
     var queryParams = <String>[];
@@ -593,7 +591,7 @@ class RobotEventsAPI {
     });
     
     final fullUrl = '$requestUrl?${queryParams.join('&')}';
-    print('Scraping URL: $fullUrl');
+    AppLogger.d('Scraping URL: $fullUrl');
     
     try {
       // Add randomized delay to appear more human-like and avoid rate limiting
@@ -603,7 +601,7 @@ class RobotEventsAPI {
       // Step 1: Get session cookies by visiting the main page first (if network allows)
       String? cookies;
       try {
-        print('🍪 Establishing session with main page...');
+        AppLogger.d('🍪 Establishing session with main page...');
         final mainPageResponse = await http.get(
           Uri.parse('https://www.robotevents.com/robot-competitions/vex-iq-competition'),
           headers: {
@@ -624,13 +622,13 @@ class RobotEventsAPI {
         // Extract cookies from the main page response
         if (mainPageResponse.headers.containsKey('set-cookie')) {
           cookies = mainPageResponse.headers['set-cookie'];
-          print('🍪 Got session cookies: ${cookies?.substring(0, 50)}...');
+          AppLogger.d('🍪 Got session cookies: ${cookies?.substring(0, 50)}...');
         }
         
         // Small delay between requests
         await Future.delayed(const Duration(milliseconds: 200));
       } catch (e) {
-        print('⚠️  Session setup failed (will proceed without cookies): $e');
+        AppLogger.d('⚠️  Session setup failed (will proceed without cookies): $e');
       }
       
       // Step 2: Advanced Cloudflare bypass with realistic mobile browser fingerprinting
@@ -666,7 +664,7 @@ class RobotEventsAPI {
       // Add session cookies if available
       if (cookies != null) {
         searchHeaders['Cookie'] = cookies;
-        print('🍪 Using session cookies for search request');
+        AppLogger.d('🍪 Using session cookies for search request');
       }
       
       final response = await http.get(
@@ -675,7 +673,7 @@ class RobotEventsAPI {
       ).timeout(const Duration(seconds: 25));
       
               if (response.statusCode == 200) {
-        print('✅ Web scraping successful, extracting SKUs...');
+        AppLogger.d('✅ Web scraping successful, extracting SKUs...');
         
         final html = response.body;
         final skus = <String>[];
@@ -704,17 +702,17 @@ class RobotEventsAPI {
           }
         }
         
-        print('🔍 Extracted ${skus.length} unique SKUs from website: $skus');
+        AppLogger.d('🔍 Extracted ${skus.length} unique SKUs from website: $skus');
         
         // Return the SKUs so the calling function can use them to fetch events
         return skus;
       } else {
-        print('❌ Web scraping failed with status: ${response.statusCode}');
-        print('Response body: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}');
+        AppLogger.d('❌ Web scraping failed with status: ${response.statusCode}');
+        AppLogger.d('Response body: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}');
         
         // Try alternative approach with mobile-specific URL
         if (response.statusCode == 403 || response.statusCode == 503) {
-          print('🔄 Trying mobile URL bypass...');
+          AppLogger.d('🔄 Trying mobile URL bypass...');
           final mobileUrl = fullUrl.replaceAll('www.robotevents.com', 'm.robotevents.com');
           
           try {
@@ -737,21 +735,21 @@ class RobotEventsAPI {
             ).timeout(const Duration(seconds: 20));
             
             if (mobileResponse.statusCode == 200) {
-              print('✅ Mobile URL bypass successful!');
+              AppLogger.d('✅ Mobile URL bypass successful!');
               // Process mobile response similar to desktop
               // (implementation would be similar to the desktop version)
             } else {
-              print('❌ Mobile URL also failed: ${mobileResponse.statusCode}');
+              AppLogger.d('❌ Mobile URL also failed: ${mobileResponse.statusCode}');
             }
           } catch (e) {
-            print('❌ Mobile URL bypass failed: $e');
+            AppLogger.d('❌ Mobile URL bypass failed: $e');
           }
         }
         
         return [];
       }
     } catch (e) {
-      print('Network request failed: $e');
+      AppLogger.d('Network request failed: $e');
       return [];
     }
   }
@@ -767,14 +765,14 @@ class RobotEventsAPI {
     DateTime? fromDate,
     DateTime? toDate,
   }) async {
-    print('=== Enhanced Event Search Debug ===');
-    print('Query: $query');
-    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
-    print('Level Class: $levelClass');
-    print('Page: $page');
+    AppLogger.d('=== Enhanced Event Search Debug ===');
+    AppLogger.d('Query: $query');
+    AppLogger.d('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    AppLogger.d('Level Class: $levelClass');
+    AppLogger.d('Page: $page');
     
     if (query == null || query.trim().isEmpty) {
-      print('No query provided, falling back to regular API search');
+      AppLogger.d('No query provided, falling back to regular API search');
       return await _fallbackApiSearch(
         query: query,
         seasonId: seasonId,
@@ -785,31 +783,31 @@ class RobotEventsAPI {
     }
     
     // Auto-detect season from query
-    print('🔍 Starting season auto-detection for query: "$query"');
+    AppLogger.d('🔍 Starting season auto-detection for query: "$query"');
     var targetSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
-    print('🔍 Initial season ID: $targetSeasonId');
+    AppLogger.d('🔍 Initial season ID: $targetSeasonId');
     
     // Check for season patterns
     if (query.contains('2024-2025') || query.contains('2024-25') || query.toLowerCase().contains('rapid relay')) {
       targetSeasonId = 189; // Rapid Relay 2024-2025
-      print('🔍 Auto-detected 2024-2025 season from query, using season ID: $targetSeasonId');
+      AppLogger.d('🔍 Auto-detected 2024-2025 season from query, using season ID: $targetSeasonId');
     } else if (query.contains('2023-2024') || query.contains('2023-24') || query.toLowerCase().contains('full volume')) {
       targetSeasonId = 180; // Full Volume 2023-2024
-      print('🔍 Auto-detected 2023-2024 season from query, using season ID: $targetSeasonId');
+      AppLogger.d('🔍 Auto-detected 2023-2024 season from query, using season ID: $targetSeasonId');
     } else if (query.contains('2025-2026') || query.contains('2025-26') || query.toLowerCase().contains('mix & match')) {
       targetSeasonId = 196; // Mix & Match 2025-2026
-      print('🔍 Auto-detected 2025-2026 season from query, using season ID: $targetSeasonId');
+      AppLogger.d('🔍 Auto-detected 2025-2026 season from query, using season ID: $targetSeasonId');
     } else {
-      print('🔍 No season pattern detected in query, using default season ID: $targetSeasonId');
+      AppLogger.d('🔍 No season pattern detected in query, using default season ID: $targetSeasonId');
     }
     
     // Update seasonId for subsequent searches
     seasonId = targetSeasonId;
-    print('🔍 Final season ID to use: $seasonId');
+    AppLogger.d('🔍 Final season ID to use: $seasonId');
     
     try {
       // Step 1: Try scraping approach
-      print('Attempting web scraping approach...');
+      AppLogger.d('Attempting web scraping approach...');
       
       final scrapingParams = <String, dynamic>{
         'name': query.trim(),
@@ -817,7 +815,7 @@ class RobotEventsAPI {
         'page': page,
       };
       
-      print('🔍 Scraping params season ID: ${scrapingParams['seasonId']} (from seasonId: $seasonId)');
+      AppLogger.d('🔍 Scraping params season ID: ${scrapingParams['seasonId']} (from seasonId: $seasonId)');
       
       // Add level class if specified
       if (levelClass != null && levelClass != 0) {
@@ -838,12 +836,12 @@ class RobotEventsAPI {
         scrapingParams['to_date'] = toDate.toIso8601String().split('T')[0];
       }
       
-      print('Scraping with params: $scrapingParams');
+      AppLogger.d('Scraping with params: $scrapingParams');
       
       final skuArray = await roboteventsCompetitionScraper(params: scrapingParams);
       
       if (skuArray.isNotEmpty) {
-        print('Found ${skuArray.length} SKUs, fetching event data...');
+        AppLogger.d('Found ${skuArray.length} SKUs, fetching event data...');
         
         // Step 2: Get event data using the scraped SKUs
         final seasonParam = seasonId ?? ApiConfig.getSelectedSeasonId();
@@ -853,48 +851,48 @@ class RobotEventsAPI {
           'per_page': 250,
         };
         
-        print('Making API call to: $requestUrl');
-        print('API params: $apiParams');
+        AppLogger.d('Making API call to: $requestUrl');
+        AppLogger.d('API params: $apiParams');
         
         final data = await roboteventsRequest(
           requestUrl: requestUrl,
           params: apiParams,
         );
         
-        print('API returned ${data.length} events');
+        AppLogger.d('API returned ${data.length} events');
         
         final events = <Event>[];
         for (final eventData in data) {
           try {
             events.add(Event.fromJson(eventData));
           } catch (e) {
-            print('Error parsing event: $e');
+            AppLogger.d('Error parsing event: $e');
           }
         }
         
         if (events.isNotEmpty) {
-          print('Successfully parsed ${events.length} events via scraping');
-          print('=== End Enhanced Event Search Debug ===');
+          AppLogger.d('Successfully parsed ${events.length} events via scraping');
+          AppLogger.d('=== End Enhanced Event Search Debug ===');
           return events;
         }
       }
       
-      print('Scraping approach failed or returned no results');
+      AppLogger.d('Scraping approach failed or returned no results');
       
       // Step 2: Try alternative scraping with simplified parameters
-      print('Trying simplified scraping approach...');
+      AppLogger.d('Trying simplified scraping approach...');
       
       final simplifiedParams = <String, dynamic>{
         'name': query.split(' ').first, // Just use the first word
         'seasonId': seasonId ?? ApiConfig.getSelectedSeasonId(),
       };
       
-      print('🔍 Simplified scraping params season ID: ${simplifiedParams['seasonId']} (from seasonId: $seasonId)');
+      AppLogger.d('🔍 Simplified scraping params season ID: ${simplifiedParams['seasonId']} (from seasonId: $seasonId)');
       
       final simplifiedSkus = await roboteventsCompetitionScraper(params: simplifiedParams);
       
       if (simplifiedSkus.isNotEmpty) {
-        print('Found ${simplifiedSkus.length} SKUs with simplified search');
+        AppLogger.d('Found ${simplifiedSkus.length} SKUs with simplified search');
         
         final seasonParam = seasonId ?? ApiConfig.getSelectedSeasonId();
         final requestUrl = '/seasons/$seasonParam/events';
@@ -917,21 +915,21 @@ class RobotEventsAPI {
         events.add(event);
             }
       } catch (e) {
-            print('Error parsing event: $e');
+            AppLogger.d('Error parsing event: $e');
       }
     }
     
         if (events.isNotEmpty) {
-          print('Successfully found ${events.length} relevant events via simplified scraping');
+          AppLogger.d('Successfully found ${events.length} relevant events via simplified scraping');
     return events;
         }
       }
       
-      print('All scraping approaches failed, falling back to API search...');
+      AppLogger.d('All scraping approaches failed, falling back to API search...');
       
     } catch (e) {
-      print('Error in enhanced event search: $e');
-      print('Falling back to regular search...');
+      AppLogger.d('Error in enhanced event search: $e');
+      AppLogger.d('Falling back to regular search...');
     }
     
     // Step 3: Fallback to enhanced API search with multiple strategies
@@ -1044,19 +1042,19 @@ class RobotEventsAPI {
     List<String>? levels,
     int page = 1,
   }) async {
-    print('=== Enhanced Fallback Search ===');
-    print('🔍 Enhanced fallback search called with:');
-    print('   Query: "$query"');
-    print('   Season ID: $seasonId');
-    print('   Level Class: $levelClass');
-    print('   Page: $page');
+    AppLogger.d('=== Enhanced Fallback Search ===');
+    AppLogger.d('🔍 Enhanced fallback search called with:');
+    AppLogger.d('   Query: "$query"');
+    AppLogger.d('   Season ID: $seasonId');
+    AppLogger.d('   Level Class: $levelClass');
+    AppLogger.d('   Page: $page');
     
     // Global API request counter across all strategies
     int globalApiRequests = 0;
     int globalEventsProcessed = 0;
     
     if (query == null || query.trim().isEmpty) {
-      print('No query provided, falling back to regular API search');
+      AppLogger.d('No query provided, falling back to regular API search');
       return await _fallbackApiSearch(
         query: query,
         seasonId: seasonId,
@@ -1071,11 +1069,11 @@ class RobotEventsAPI {
     final selectedSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
     final isLocationSearch = _isLocationQuery(query.toLowerCase());
     
-    print('🔍 Location search detected: $isLocationSearch');
-    print('🔍 Using season ID: $selectedSeasonId');
+    AppLogger.d('🔍 Location search detected: $isLocationSearch');
+    AppLogger.d('🔍 Using season ID: $selectedSeasonId');
     
     // Strategy 1: Search with query parameter
-    print('🔍 Strategy 1: API search with query parameter');
+    AppLogger.d('🔍 Strategy 1: API search with query parameter');
     try {
       final params1 = ApiConfig.getEventSearchParams(
         query: query,
@@ -1084,7 +1082,7 @@ class RobotEventsAPI {
         levels: levels,
         page: 1,
       );
-      print('🔍 Strategy 1 URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params1)}');
+      AppLogger.d('🔍 Strategy 1 URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params1)}');
       
       final eventsData1 = await roboteventsRequest(
         requestUrl: '/events',
@@ -1094,12 +1092,12 @@ class RobotEventsAPI {
       globalApiRequests++;
       globalEventsProcessed += eventsData1.length;
       
-      print('🔍 Strategy 1 returned ${eventsData1.length} events (📊 Global API requests: $globalApiRequests, Global events: $globalEventsProcessed)');
+      AppLogger.d('🔍 Strategy 1 returned ${eventsData1.length} events (📊 Global API requests: $globalApiRequests, Global events: $globalEventsProcessed)');
       if (eventsData1.isNotEmpty) {
         final firstEvent = Event.fromJson(eventsData1[0]);
         final lastEvent = Event.fromJson(eventsData1[eventsData1.length-1]);
-        print('🔍 Strategy 1 first event: "${firstEvent.name}" (${firstEvent.city}, ${firstEvent.region}, ${firstEvent.country})');
-        print('🔍 Strategy 1 last event: "${lastEvent.name}" (${lastEvent.city}, ${lastEvent.region}, ${lastEvent.country})');
+        AppLogger.d('🔍 Strategy 1 first event: "${firstEvent.name}" (${firstEvent.city}, ${firstEvent.region}, ${firstEvent.country})');
+        AppLogger.d('🔍 Strategy 1 last event: "${lastEvent.name}" (${lastEvent.city}, ${lastEvent.region}, ${lastEvent.country})');
       }
       
       for (final eventData in eventsData1) {
@@ -1107,15 +1105,15 @@ class RobotEventsAPI {
         if (!seenEventIds.contains(event.id) && _isEventRelevant(event, query)) {
           allEvents.add(event);
           seenEventIds.add(event.id);
-          print('✅ Strategy 1 added: "${event.name}" (${event.city}, ${event.region}, ${event.country})');
+          AppLogger.d('✅ Strategy 1 added: "${event.name}" (${event.city}, ${event.region}, ${event.country})');
         }
       }
     } catch (e) {
-      print('❌ Strategy 1 failed: $e');
+      AppLogger.d('❌ Strategy 1 failed: $e');
     }
     
     // Strategy 2: COMPREHENSIVE search with client-side filtering (ALL pages)
-    print('🔍 Strategy 2: COMPREHENSIVE search with client-side filtering');
+    AppLogger.d('🔍 Strategy 2: COMPREHENSIVE search with client-side filtering');
     
     int totalApiRequests = 0;
     int totalEventsFound = 0;
@@ -1129,7 +1127,7 @@ class RobotEventsAPI {
           levels: levels,
           page: pageNum,
         );
-        print('🔍 Strategy 2 Page $pageNum URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params2)}');
+        AppLogger.d('🔍 Strategy 2 Page $pageNum URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params2)}');
         
         final eventsData2 = await roboteventsRequest(
           requestUrl: '/events',
@@ -1141,19 +1139,19 @@ class RobotEventsAPI {
         globalApiRequests++;
         globalEventsProcessed += eventsData2.length;
         
-        print('🔍 Strategy 2 Page $pageNum returned ${eventsData2.length} events (📊 S2 API requests: $totalApiRequests, S2 events: $totalEventsFound, 🌐 Global API requests: $globalApiRequests, Global events: $globalEventsProcessed)');
+        AppLogger.d('🔍 Strategy 2 Page $pageNum returned ${eventsData2.length} events (📊 S2 API requests: $totalApiRequests, S2 events: $totalEventsFound, 🌐 Global API requests: $globalApiRequests, Global events: $globalEventsProcessed)');
         
         // If no events returned, we've reached the end
         if (eventsData2.isEmpty) {
-          print('🔍 Strategy 2 Page $pageNum returned no events, stopping pagination');
+          AppLogger.d('🔍 Strategy 2 Page $pageNum returned no events, stopping pagination');
           break;
         }
         
         if (eventsData2.isNotEmpty) {
           final firstEvent = Event.fromJson(eventsData2[0]);
           final lastEvent = Event.fromJson(eventsData2[eventsData2.length-1]);
-          print('🔍 Strategy 2 Page $pageNum first event: "${firstEvent.name}" (${firstEvent.city}, ${firstEvent.region}, ${firstEvent.country})');
-          print('🔍 Strategy 2 Page $pageNum last event: "${lastEvent.name}" (${lastEvent.city}, ${lastEvent.region}, ${lastEvent.country})');
+          AppLogger.d('🔍 Strategy 2 Page $pageNum first event: "${firstEvent.name}" (${firstEvent.city}, ${firstEvent.region}, ${firstEvent.country})');
+          AppLogger.d('🔍 Strategy 2 Page $pageNum last event: "${lastEvent.name}" (${lastEvent.city}, ${lastEvent.region}, ${lastEvent.country})');
         }
         
         var pageRelevantCount = 0;
@@ -1164,43 +1162,43 @@ class RobotEventsAPI {
             seenEventIds.add(event.id);
             pageRelevantCount++;
             totalRelevantEvents++;
-            print('✅ Strategy 2 Page $pageNum added: "${event.name}" (${event.city}, ${event.region}, ${event.country})');
+            AppLogger.d('✅ Strategy 2 Page $pageNum added: "${event.name}" (${event.city}, ${event.region}, ${event.country})');
           }
         }
-        print('🔍 Strategy 2 Page $pageNum found $pageRelevantCount relevant events (📊 Total relevant: $totalRelevantEvents)');
+        AppLogger.d('🔍 Strategy 2 Page $pageNum found $pageRelevantCount relevant events (📊 Total relevant: $totalRelevantEvents)');
         
         // If we found fewer than 250 events, we've reached the end
         if (eventsData2.length < 250) {
-          print('🔍 Strategy 2 reached end of results at page $pageNum');
+          AppLogger.d('🔍 Strategy 2 reached end of results at page $pageNum');
           break;
         }
         
         // Safety limit to prevent runaway API usage
         if (pageNum >= 50) {
-          print('⚠️ Strategy 2 hit safety limit of 50 pages, stopping');
+          AppLogger.d('⚠️ Strategy 2 hit safety limit of 50 pages, stopping');
           break;
         }
         
       } catch (e) {
-        print('❌ Strategy 2 Page $pageNum failed: $e');
+        AppLogger.d('❌ Strategy 2 Page $pageNum failed: $e');
         break;
       }
     }
     
-    print('📊 Strategy 2 COMPREHENSIVE SEARCH STATS:');
-    print('   🔢 Total API requests: $totalApiRequests');
-    print('   📋 Total events processed: $totalEventsFound');
-    print('   ✅ Total relevant events found: $totalRelevantEvents');
-    print('   📊 Average events per page: ${totalEventsFound / (totalApiRequests > 0 ? totalApiRequests : 1)}');
-    print('   🎯 Relevance rate: ${totalRelevantEvents / (totalEventsFound > 0 ? totalEventsFound : 1) * 100}%');
+    AppLogger.d('📊 Strategy 2 COMPREHENSIVE SEARCH STATS:');
+    AppLogger.d('   🔢 Total API requests: $totalApiRequests');
+    AppLogger.d('   📋 Total events processed: $totalEventsFound');
+    AppLogger.d('   ✅ Total relevant events found: $totalRelevantEvents');
+    AppLogger.d('   📊 Average events per page: ${totalEventsFound / (totalApiRequests > 0 ? totalApiRequests : 1)}');
+    AppLogger.d('   🎯 Relevance rate: ${totalRelevantEvents / (totalEventsFound > 0 ? totalEventsFound : 1) * 100}%');
     
     // Strategy 3: Search with individual words  
-    print('🔍 Strategy 3: Search with individual words');
+    AppLogger.d('🔍 Strategy 3: Search with individual words');
     final queryWords = query.toLowerCase().split(RegExp(r'\s+'))
         .where((word) => word.length >= 2)
         .toList();
     
-    print('🔍 Strategy 3 words to search: $queryWords');
+    AppLogger.d('🔍 Strategy 3 words to search: $queryWords');
     
     for (final word in queryWords) {
       try {
@@ -1211,7 +1209,7 @@ class RobotEventsAPI {
           levels: levels,
           page: 1,
         );
-        print('🔍 Strategy 3 word "$word" URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params3)}');
+        AppLogger.d('🔍 Strategy 3 word "$word" URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params3)}');
         
         final eventsData3 = await roboteventsRequest(
           requestUrl: '/events',
@@ -1221,10 +1219,10 @@ class RobotEventsAPI {
         globalApiRequests++;
         globalEventsProcessed += eventsData3.length;
         
-        print('🔍 Strategy 3 for word "$word" returned ${eventsData3.length} events (📊 Global API requests: $globalApiRequests, Global events: $globalEventsProcessed)');
+        AppLogger.d('🔍 Strategy 3 for word "$word" returned ${eventsData3.length} events (📊 Global API requests: $globalApiRequests, Global events: $globalEventsProcessed)');
         if (eventsData3.isNotEmpty) {
           final firstEvent = Event.fromJson(eventsData3[0]);
-          print('🔍 Strategy 3 "$word" first event: "${firstEvent.name}" (${firstEvent.city}, ${firstEvent.region}, ${firstEvent.country})');
+          AppLogger.d('🔍 Strategy 3 "$word" first event: "${firstEvent.name}" (${firstEvent.city}, ${firstEvent.region}, ${firstEvent.country})');
         }
         
         var wordRelevantCount = 0;
@@ -1234,42 +1232,42 @@ class RobotEventsAPI {
             allEvents.add(event);
             seenEventIds.add(event.id);
             wordRelevantCount++;
-            print('✅ Strategy 3 "$word" added: "${event.name}" (${event.city}, ${event.region}, ${event.country})');
+            AppLogger.d('✅ Strategy 3 "$word" added: "${event.name}" (${event.city}, ${event.region}, ${event.country})');
           }
         }
-        print('🔍 Strategy 3 for word "$word" found $wordRelevantCount relevant events');
+        AppLogger.d('🔍 Strategy 3 for word "$word" found $wordRelevantCount relevant events');
       } catch (e) {
-        print('❌ Strategy 3 for word "$word" failed: $e');
+        AppLogger.d('❌ Strategy 3 for word "$word" failed: $e');
       }
     }
     
-    print('🔍 Enhanced fallback found ${allEvents.length} relevant events total');
+    AppLogger.d('🔍 Enhanced fallback found ${allEvents.length} relevant events total');
     
     // COMPREHENSIVE FINAL STATISTICS
-    print('');
-    print('==================== 📊 COMPREHENSIVE SEARCH STATISTICS ====================');
-    print('🔢 TOTAL API REQUESTS MADE: $globalApiRequests');
-    print('📋 TOTAL EVENTS PROCESSED: $globalEventsProcessed');
-    print('✅ TOTAL RELEVANT EVENTS FOUND: ${allEvents.length}');
-    print('📊 AVERAGE EVENTS PER API REQUEST: ${globalEventsProcessed / (globalApiRequests > 0 ? globalApiRequests : 1)}');
-    print('🎯 OVERALL RELEVANCE RATE: ${allEvents.length / (globalEventsProcessed > 0 ? globalEventsProcessed : 1) * 100}%');
-    print('🏆 SEARCH EFFICIENCY: ${allEvents.length} relevant events from $globalApiRequests API calls');
-    print('=======================================================================');
-    print('');
+    AppLogger.d('');
+    AppLogger.d('==================== 📊 COMPREHENSIVE SEARCH STATISTICS ====================');
+    AppLogger.d('🔢 TOTAL API REQUESTS MADE: $globalApiRequests');
+    AppLogger.d('📋 TOTAL EVENTS PROCESSED: $globalEventsProcessed');
+    AppLogger.d('✅ TOTAL RELEVANT EVENTS FOUND: ${allEvents.length}');
+    AppLogger.d('📊 AVERAGE EVENTS PER API REQUEST: ${globalEventsProcessed / (globalApiRequests > 0 ? globalApiRequests : 1)}');
+    AppLogger.d('🎯 OVERALL RELEVANCE RATE: ${allEvents.length / (globalEventsProcessed > 0 ? globalEventsProcessed : 1) * 100}%');
+    AppLogger.d('🏆 SEARCH EFFICIENCY: ${allEvents.length} relevant events from $globalApiRequests API calls');
+    AppLogger.d('=======================================================================');
+    AppLogger.d('');
     
-    print('🔍 Final URLs checked:');
-    print('   - Strategy 1 (with query): ${ApiConfig.robotEventsBaseUrl}/events?program=41&season=$selectedSeasonId&name=$query&page=1&per_page=250');
-    print('   - Strategy 2 (broad): ${ApiConfig.robotEventsBaseUrl}/events?program=41&season=$selectedSeasonId&page=1&per_page=250');
-    print('   - Strategy 3 (word search): ${ApiConfig.robotEventsBaseUrl}/events?program=41&season=$selectedSeasonId&name=panama&page=1&per_page=250');
+    AppLogger.d('🔍 Final URLs checked:');
+    AppLogger.d('   - Strategy 1 (with query): ${ApiConfig.robotEventsBaseUrl}/events?program=41&season=$selectedSeasonId&name=$query&page=1&per_page=250');
+    AppLogger.d('   - Strategy 2 (broad): ${ApiConfig.robotEventsBaseUrl}/events?program=41&season=$selectedSeasonId&page=1&per_page=250');
+    AppLogger.d('   - Strategy 3 (word search): ${ApiConfig.robotEventsBaseUrl}/events?program=41&season=$selectedSeasonId&name=panama&page=1&per_page=250');
     
     if (allEvents.isNotEmpty) {
-      print('🔍 Final events found:');
+      AppLogger.d('🔍 Final events found:');
       for (int i = 0; i < allEvents.length && i < 5; i++) {
         final event = allEvents[i];
-        print('   ${i+1}. "${event.name}" (${event.city}, ${event.region}, ${event.country}) [ID: ${event.id}]');
+        AppLogger.d('   ${i+1}. "${event.name}" (${event.city}, ${event.region}, ${event.country}) [ID: ${event.id}]');
       }
     } else {
-      print('❌ No relevant events found for query "$query" in season $selectedSeasonId');
+      AppLogger.d('❌ No relevant events found for query "$query" in season $selectedSeasonId');
     }
     
     // Sort events by date (most recent first), handling null dates
@@ -1285,7 +1283,7 @@ class RobotEventsAPI {
   
   // Fetch events by SKU array (much more efficient than individual scraping)
   static Future<List<Event>> _fetchEventsBySKUs(List<String> skus, {int? seasonId}) async {
-    print('📡 Fetching events for ${skus.length} SKUs via API...');
+    AppLogger.d('📡 Fetching events for ${skus.length} SKUs via API...');
     
     try {
       // Use the SKU array parameter to fetch multiple events at once
@@ -1299,7 +1297,7 @@ class RobotEventsAPI {
         params['season'] = seasonId;
       }
       
-      print('📡 SKU API request with params: $params');
+      AppLogger.d('📡 SKU API request with params: $params');
       
       final data = await roboteventsRequest(
         requestUrl: '/events',
@@ -1311,17 +1309,17 @@ class RobotEventsAPI {
         try {
           final event = Event.fromJson(eventData);
           events.add(event);
-          print('✅ SKU API loaded event: "${event.name}" [${event.sku}]');
+          AppLogger.d('✅ SKU API loaded event: "${event.name}" [${event.sku}]');
         } catch (e) {
-          print('❌ Error parsing event from SKU API: $e');
+          AppLogger.d('❌ Error parsing event from SKU API: $e');
         }
       }
       
-      print('📡 SKU API successfully fetched ${events.length} events');
+      AppLogger.d('📡 SKU API successfully fetched ${events.length} events');
       return events;
       
     } catch (e) {
-      print('❌ SKU API request failed: $e');
+      AppLogger.d('❌ SKU API request failed: $e');
       return [];
     }
   }
@@ -1347,7 +1345,7 @@ class RobotEventsAPI {
     required Team team,
     int? seasonId,
   }) async {
-    print('=== Getting Comprehensive Team Data for ${team.number} ===');
+    AppLogger.d('=== Getting Comprehensive Team Data for ${team.number} ===');
     
     final targetSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
     
@@ -1364,8 +1362,8 @@ class RobotEventsAPI {
     final rankings = futures[2] as List<dynamic>;
     final worldSkills = futures[3] as List<dynamic>;
     
-    print('Fetched: ${events.length} events, ${awards.length} awards, ${rankings.length} rankings, ${worldSkills.length} world skills');
-    print('=== End Comprehensive Team Data ===');
+    AppLogger.d('Fetched: ${events.length} events, ${awards.length} awards, ${rankings.length} rankings, ${worldSkills.length} world skills');
+    AppLogger.d('=== End Comprehensive Team Data ===');
     
     return {
       'events': events,
@@ -1401,8 +1399,8 @@ class RobotEventsAPI {
     required int eventId,
     int page = 1,
   }) async {
-    print('=== Event Teams Debug ===');
-    print('Event ID: $eventId');
+    AppLogger.d('=== Event Teams Debug ===');
+    AppLogger.d('Event ID: $eventId');
     
     List<dynamic> allTeamsData = [];
     int currentPage = 1;
@@ -1420,7 +1418,7 @@ class RobotEventsAPI {
         params: params,
       );
       
-      print('Page $currentPage: Event Teams API returned ${data.length} teams');
+      AppLogger.d('Page $currentPage: Event Teams API returned ${data.length} teams');
       
       allTeamsData.addAll(data);
       
@@ -1432,7 +1430,7 @@ class RobotEventsAPI {
       }
     }
     
-    print('Total Event Teams API returned ${allTeamsData.length} teams');
+    AppLogger.d('Total Event Teams API returned ${allTeamsData.length} teams');
     
     final teams = <Team>[];
     for (final teamData in allTeamsData) {
@@ -1440,12 +1438,12 @@ class RobotEventsAPI {
         final team = Team.fromJson(teamData);
         teams.add(team);
       } catch (e) {
-        print('Error parsing team data: $e');
+        AppLogger.d('Error parsing team data: $e');
       }
     }
     
-    print('Total teams parsed: ${teams.length}');
-    print('=== End Event Teams Debug ===');
+    AppLogger.d('Total teams parsed: ${teams.length}');
+    AppLogger.d('=== End Event Teams Debug ===');
     
     return teams;
   }
@@ -1456,10 +1454,10 @@ class RobotEventsAPI {
     List<int>? eventIds,
     int? seasonId,
   }) async {
-    print('=== Team Matches Debug ===');
-    print('Team ID: $teamId');
-    print('Event IDs: $eventIds');
-    print('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
+    AppLogger.d('=== Team Matches Debug ===');
+    AppLogger.d('Team ID: $teamId');
+    AppLogger.d('Event IDs: $eventIds');
+    AppLogger.d('Season ID: ${seasonId ?? ApiConfig.getSelectedSeasonId()}');
     
     final params = <String, dynamic>{};
     if (seasonId != null) {
@@ -1486,7 +1484,7 @@ class RobotEventsAPI {
       url += '?${queryParts.join('&')}';
     }
     
-    print('🔍 Team Matches URL: $url');
+    AppLogger.d('🔍 Team Matches URL: $url');
     
     // Use direct HTTP request for array parameters
     final response = await http.get(
@@ -1497,12 +1495,12 @@ class RobotEventsAPI {
     if (response.statusCode == 200) {
       final jsonData = json.decode(response.body);
       final data = jsonData['data'] as List<dynamic>? ?? [];
-      print('Team Matches API returned ${data.length} matches');
-      print('=== End Team Matches Debug ===');
+      AppLogger.d('Team Matches API returned ${data.length} matches');
+      AppLogger.d('=== End Team Matches Debug ===');
       return data;
     } else {
-      print('Team Matches API error: ${response.statusCode} - ${response.body}');
-      print('=== End Team Matches Debug ===');
+      AppLogger.d('Team Matches API error: ${response.statusCode} - ${response.body}');
+      AppLogger.d('=== End Team Matches Debug ===');
       throw Exception('API error: ${response.statusCode}');
     }
   }
@@ -1513,8 +1511,8 @@ class RobotEventsAPI {
     required int divisionId,
     int page = 1,
   }) async {
-    print('=== Event Matches Debug ===');
-    print('Event ID: $eventId, Division ID: $divisionId');
+    AppLogger.d('=== Event Matches Debug ===');
+    AppLogger.d('Event ID: $eventId, Division ID: $divisionId');
     
     List<dynamic> allMatches = [];
     int currentPage = 1;
@@ -1533,7 +1531,7 @@ class RobotEventsAPI {
           params: params,
         );
         
-        print('Page $currentPage: Event Matches API returned ${data.length} matches for division $divisionId');
+        AppLogger.d('Page $currentPage: Event Matches API returned ${data.length} matches for division $divisionId');
         
         // Process and validate match data
         for (final match in data) {
@@ -1550,17 +1548,17 @@ class RobotEventsAPI {
         }
         
       } catch (e) {
-        print('Division-specific matches failed: $e');
+        AppLogger.d('Division-specific matches failed: $e');
         
         // Fallback: Try direct event matches for events without proper divisions
         try {
-          print('🔄 Trying fallback: direct event matches endpoint...');
+          AppLogger.d('🔄 Trying fallback: direct event matches endpoint...');
           final fallbackData = await roboteventsRequest(
             requestUrl: '/events/$eventId/matches',
             params: params,
           );
           
-          print('Page $currentPage: ✅ Fallback Event Matches API returned ${fallbackData.length} matches');
+          AppLogger.d('Page $currentPage: ✅ Fallback Event Matches API returned ${fallbackData.length} matches');
           
           // Process and validate match data
           for (final match in fallbackData) {
@@ -1576,7 +1574,7 @@ class RobotEventsAPI {
           }
           
         } catch (fallbackError) {
-          print('❌ Fallback matches API also failed: $fallbackError');
+          AppLogger.d('❌ Fallback matches API also failed: $fallbackError');
           hasMorePages = false;
         }
       }
@@ -1604,8 +1602,8 @@ class RobotEventsAPI {
       return aMatchNum.compareTo(bMatchNum);
     });
     
-    print('Total Event Matches API returned ${allMatches.length} matches for division $divisionId');
-    print('=== End Event Matches Debug ===');
+    AppLogger.d('Total Event Matches API returned ${allMatches.length} matches for division $divisionId');
+    AppLogger.d('=== End Event Matches Debug ===');
     
     return allMatches;
   }
@@ -1689,7 +1687,7 @@ class RobotEventsAPI {
         return dateString;
       }
     } catch (e) {
-      print('Error parsing date: $dateString - $e');
+      AppLogger.d('Error parsing date: $dateString - $e');
       return dateString;
     }
   }
@@ -1699,8 +1697,8 @@ class RobotEventsAPI {
     required int eventId,
     int page = 1,
   }) async {
-    print('=== Event Skills Debug ===');
-    print('Event ID: $eventId');
+    AppLogger.d('=== Event Skills Debug ===');
+    AppLogger.d('Event ID: $eventId');
     
     List<dynamic> allSkills = [];
     int currentPage = 1;
@@ -1713,13 +1711,13 @@ class RobotEventsAPI {
       };
       
       try {
-        print('🔍 Trying skills endpoint: /events/$eventId/skills (page $currentPage)');
+        AppLogger.d('🔍 Trying skills endpoint: /events/$eventId/skills (page $currentPage)');
         final data = await roboteventsRequest(
           requestUrl: '/events/$eventId/skills',
           params: params,
         );
         
-        print('Page $currentPage: Event Skills API returned ${data.length} skills records');
+        AppLogger.d('Page $currentPage: Event Skills API returned ${data.length} skills records');
         
         allSkills.addAll(data);
         
@@ -1731,16 +1729,16 @@ class RobotEventsAPI {
         }
         
       } catch (e) {
-        print('❌ Skills API failed: $e');
+        AppLogger.d('❌ Skills API failed: $e');
         hasMorePages = false;
       }
     }
     
-    print('Total Event Skills API returned ${allSkills.length} skills records');
+    AppLogger.d('Total Event Skills API returned ${allSkills.length} skills records');
     if (allSkills.isNotEmpty) {
-      print('  Sample skill types found: ${allSkills.map((s) => s['type']).toSet().toList()}');
+      AppLogger.d('  Sample skill types found: ${allSkills.map((s) => s['type']).toSet().toList()}');
     }
-    print('=== End Event Skills Debug ===');
+    AppLogger.d('=== End Event Skills Debug ===');
     
     return allSkills;
   }
@@ -1750,8 +1748,8 @@ class RobotEventsAPI {
     required int eventId,
     int page = 1,
   }) async {
-    print('=== Event Awards Debug ===');
-    print('Event ID: $eventId');
+    AppLogger.d('=== Event Awards Debug ===');
+    AppLogger.d('Event ID: $eventId');
     
     List<dynamic> allAwards = [];
     int currentPage = 1;
@@ -1764,13 +1762,13 @@ class RobotEventsAPI {
       };
       
       try {
-        print('🔍 Trying awards endpoint: /events/$eventId/awards (page $currentPage)');
+        AppLogger.d('🔍 Trying awards endpoint: /events/$eventId/awards (page $currentPage)');
         final data = await roboteventsRequest(
           requestUrl: '/events/$eventId/awards',
           params: params,
         );
         
-        print('Page $currentPage: Event Awards API returned ${data.length} awards records');
+        AppLogger.d('Page $currentPage: Event Awards API returned ${data.length} awards records');
         
         allAwards.addAll(data);
         
@@ -1782,16 +1780,16 @@ class RobotEventsAPI {
         }
         
       } catch (e) {
-        print('❌ Awards API failed: $e');
+        AppLogger.d('❌ Awards API failed: $e');
         hasMorePages = false;
       }
     }
     
-    print('Total Event Awards API returned ${allAwards.length} awards records');
+    AppLogger.d('Total Event Awards API returned ${allAwards.length} awards records');
     if (allAwards.isNotEmpty) {
-      print('  Sample award types found: ${allAwards.map((a) => a['title']).toSet().toList()}');
+      AppLogger.d('  Sample award types found: ${allAwards.map((a) => a['title']).toSet().toList()}');
     }
-    print('=== End Event Awards Debug ===');
+    AppLogger.d('=== End Event Awards Debug ===');
     
     return allAwards;
   }
@@ -1800,8 +1798,8 @@ class RobotEventsAPI {
   static Future<Map<String, dynamic>> getEventDetails({
     required int eventId,
   }) async {
-    print('=== Event Details Debug ===');
-    print('Event ID: $eventId');
+    AppLogger.d('=== Event Details Debug ===');
+    AppLogger.d('Event ID: $eventId');
     
     try {
       final response = await roboteventsRequest(
@@ -1813,10 +1811,10 @@ class RobotEventsAPI {
       final eventData = response.isNotEmpty ? response[0] : {};
       
       // Debug: Print the full event data structure to understand divisions
-      print('🔍 Full event data keys: ${eventData.keys.toList()}');
+      AppLogger.d('🔍 Full event data keys: ${eventData.keys.toList()}');
       if (eventData.containsKey('divisions')) {
-        print('🔍 Divisions field type: ${eventData['divisions'].runtimeType}');
-        print('🔍 Divisions field value: ${eventData['divisions']}');
+        AppLogger.d('🔍 Divisions field type: ${eventData['divisions'].runtimeType}');
+        AppLogger.d('🔍 Divisions field value: ${eventData['divisions']}');
       }
       
       // Extract divisions from event data (like VRC RoboScout)
@@ -1824,14 +1822,14 @@ class RobotEventsAPI {
       
       // If divisions is null, try alternative approaches
       if (divisionsData == null) {
-        print('🔍 Divisions field is null, checking for alternative structures...');
+        AppLogger.d('🔍 Divisions field is null, checking for alternative structures...');
         
         // Some events might have divisions in a different structure
         if (eventData.containsKey('division')) {
           divisionsData = [eventData['division']];
-          print('🔍 Found single division in "division" field');
+          AppLogger.d('🔍 Found single division in "division" field');
         } else {
-          print('🔍 No divisions found in event data, trying to fetch divisions separately...');
+          AppLogger.d('🔍 No divisions found in event data, trying to fetch divisions separately...');
           
           // Try to fetch divisions from a separate endpoint
           try {
@@ -1842,13 +1840,13 @@ class RobotEventsAPI {
             
             if (divisionsResponse.isNotEmpty) {
               divisionsData = divisionsResponse;
-              print('🔍 Found ${divisionsResponse.length} divisions from separate endpoint');
+              AppLogger.d('🔍 Found ${divisionsResponse.length} divisions from separate endpoint');
             } else {
-              print('🔍 No divisions found in separate endpoint, trying alternative approaches...');
+              AppLogger.d('🔍 No divisions found in separate endpoint, trying alternative approaches...');
               
               // For VEX IQ, try to get divisions from rankings data (where they actually exist)
               try {
-                print('🔍 Trying to extract divisions from rankings data...');
+                AppLogger.d('🔍 Trying to extract divisions from rankings data...');
                 
                 // Try multiple division IDs to find all divisions (World Championships have multiple divisions)
                 final Set<Map<String, dynamic>> uniqueDivisions = {};
@@ -1856,14 +1854,14 @@ class RobotEventsAPI {
                 
                 for (final divisionId in divisionIdsToTry) {
                   try {
-                    print('🔍 Checking division ID: $divisionId');
+                    AppLogger.d('🔍 Checking division ID: $divisionId');
                     final rankingsResponse = await roboteventsRequest(
                       requestUrl: '/events/$eventId/divisions/$divisionId/rankings',
                       params: {'per_page': 1}, // Just get one ranking to check if division exists
                     );
                     
                     if (rankingsResponse.isNotEmpty) {
-                      print('🔍 Found rankings for division ID: $divisionId');
+                      AppLogger.d('🔍 Found rankings for division ID: $divisionId');
                       final ranking = rankingsResponse[0];
                       
                       if (ranking.containsKey('division') && ranking['division'] != null) {
@@ -1872,21 +1870,21 @@ class RobotEventsAPI {
                         final divisionKey = '${division['id']}_${division['name']}';
                         if (!uniqueDivisions.any((d) => '${d['id']}_${d['name']}' == divisionKey)) {
                           uniqueDivisions.add(division);
-                          print('  - Found division: ${division['name']} (ID: ${division['id']})');
+                          AppLogger.d('  - Found division: ${division['name']} (ID: ${division['id']})');
                         }
                       }
                     }
                   } catch (e) {
                     // Division doesn't exist, continue to next
-                    print('🔍 Division ID $divisionId not found, continuing...');
+                    AppLogger.d('🔍 Division ID $divisionId not found, continuing...');
                   }
                 }
                 
                 if (uniqueDivisions.isNotEmpty) {
                   divisionsData = uniqueDivisions.toList();
-                  print('🔍 Found ${uniqueDivisions.length} total divisions from rankings data');
+                  AppLogger.d('🔍 Found ${uniqueDivisions.length} total divisions from rankings data');
                 } else {
-                  print('🔍 No divisions found in rankings data, creating default division structure');
+                  AppLogger.d('🔍 No divisions found in rankings data, creating default division structure');
                   divisionsData = [{
                     'id': 1,
                     'name': 'Main',
@@ -1894,7 +1892,7 @@ class RobotEventsAPI {
                   }];
                 }
               } catch (rankingsError) {
-                print('🔍 Rankings endpoint failed: $rankingsError, creating default division structure');
+                AppLogger.d('🔍 Rankings endpoint failed: $rankingsError, creating default division structure');
                 divisionsData = [{
                   'id': 1,
                   'name': 'Main',
@@ -1903,7 +1901,7 @@ class RobotEventsAPI {
               }
             }
           } catch (divisionError) {
-            print('🔍 Division endpoint failed: $divisionError, creating default division structure');
+            AppLogger.d('🔍 Division endpoint failed: $divisionError, creating default division structure');
             // Create a default "main" division for events without explicit divisions
             divisionsData = [{
               'id': 1,
@@ -1916,21 +1914,21 @@ class RobotEventsAPI {
       
       final divisions = divisionsData is List ? divisionsData : <dynamic>[];
       
-      print('Event Details API returned ${divisions.length} divisions');
+      AppLogger.d('Event Details API returned ${divisions.length} divisions');
       if (divisions.isNotEmpty) {
         for (final division in divisions) {
-          print('  - Division: ${division['name'] ?? 'Unknown'} (ID: ${division['id']})');
+          AppLogger.d('  - Division: ${division['name'] ?? 'Unknown'} (ID: ${division['id']})');
         }
       }
-      print('=== End Event Details Debug ===');
+      AppLogger.d('=== End Event Details Debug ===');
       
       return {
         'divisions': divisions,
         'event': eventData,
       };
     } catch (e) {
-      print('Event Details API failed: $e');
-      print('=== End Event Details Debug ===');
+      AppLogger.d('Event Details API failed: $e');
+      AppLogger.d('=== End Event Details Debug ===');
       return {
         'divisions': <dynamic>[],
         'event': {},
@@ -1944,8 +1942,8 @@ class RobotEventsAPI {
     required int divisionId,
     int page = 1,
   }) async {
-    print('=== Event Division Rankings Debug ===');
-    print('Event ID: $eventId, Division ID: $divisionId');
+    AppLogger.d('=== Event Division Rankings Debug ===');
+    AppLogger.d('Event ID: $eventId, Division ID: $divisionId');
     
     List<dynamic> allRankings = [];
     int currentPage = 1;
@@ -1963,13 +1961,13 @@ class RobotEventsAPI {
           params: params,
         );
         
-        print('Page $currentPage: Event Division Rankings API returned ${data.length} rankings for division $divisionId');
+        AppLogger.d('Page $currentPage: Event Division Rankings API returned ${data.length} rankings for division $divisionId');
         
         // Debug: Print sample ranking data to understand structure
         if (data.isNotEmpty && currentPage == 1) {
-          print('🔍 Sample ranking data structure:');
-          print('  Keys: ${data[0].keys.toList()}');
-          print('  Sample ranking: ${data[0]}');
+          AppLogger.d('🔍 Sample ranking data structure:');
+          AppLogger.d('  Keys: ${data[0].keys.toList()}');
+          AppLogger.d('  Sample ranking: ${data[0]}');
         }
         
         allRankings.addAll(data);
@@ -1982,13 +1980,13 @@ class RobotEventsAPI {
         }
         
       } catch (e) {
-        print('❌ Division rankings API failed: $e');
+        AppLogger.d('❌ Division rankings API failed: $e');
         hasMorePages = false;
       }
     }
     
-    print('Total Event Division Rankings API returned ${allRankings.length} rankings for division $divisionId');
-    print('=== End Event Division Rankings Debug ===');
+    AppLogger.d('Total Event Division Rankings API returned ${allRankings.length} rankings for division $divisionId');
+    AppLogger.d('=== End Event Division Rankings Debug ===');
     
     return allRankings;
   }
@@ -2016,7 +2014,7 @@ class RobotEventsAPI {
     List<String>? levels,
     int page = 1,
   }) async {
-    print('=== Fallback API Search ===');
+    AppLogger.d('=== Fallback API Search ===');
     
     final params = ApiConfig.getEventSearchParams(
       query: query,
@@ -2026,7 +2024,7 @@ class RobotEventsAPI {
       page: page,
     );
     
-    print('🔍 Fallback API URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params)}');
+    AppLogger.d('🔍 Fallback API URL: ${ApiConfig.robotEventsBaseUrl}/events?${_buildQueryString(params)}');
     
     final data = await roboteventsRequest(
       requestUrl: '/events',
@@ -2038,11 +2036,11 @@ class RobotEventsAPI {
       try {
         events.add(Event.fromJson(eventData));
       } catch (e) {
-        print('Error parsing event: $e');
+        AppLogger.d('Error parsing event: $e');
       }
     }
     
-    print('Fallback API search found ${events.length} events');
+    AppLogger.d('Fallback API search found ${events.length} events');
     return events;
   }
 
@@ -2064,7 +2062,7 @@ class RobotEventsAPI {
       }
       return null;
     } catch (e) {
-      print('Error getting team by number: $e');
+      AppLogger.d('Error getting team by number: $e');
       return null;
     }
   }
@@ -2087,7 +2085,7 @@ class RobotEventsAPI {
       }
       return null;
     } catch (e) {
-      print('Error getting event by SKU: $e');
+      AppLogger.d('Error getting event by SKU: $e');
       return null;
     }
   }

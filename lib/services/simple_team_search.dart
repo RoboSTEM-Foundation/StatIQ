@@ -20,9 +20,9 @@ class SimpleTeamSearch {
         final Map<String, dynamic> data = json.decode(cachedTeamsString);
         _allTeams = List<Map<String, dynamic>>.from(data['teams'] ?? []);
         _isInitialized = true;
-        print('📱 Loaded ${_allTeams.length} teams for search');
+        AppLogger.d('📱 Loaded ${_allTeams.length} teams for search');
       } catch (e) {
-        print('❌ Error loading team data: $e');
+        AppLogger.d('❌ Error loading team data: $e');
         _allTeams = [];
       }
     }
@@ -121,7 +121,7 @@ class SimpleTeamSearch {
         'grade': team.grade,
       }).take(limit).toList();
     } catch (e) {
-      print('❌ Error searching teams via API: $e');
+      AppLogger.d('❌ Error searching teams via API: $e');
       return [];
     }
   }

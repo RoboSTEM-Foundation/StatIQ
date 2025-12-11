@@ -73,7 +73,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             return;
           }
         } catch (e) {
-          print('Error parsing skills cache: $e');
+          AppLogger.d('Error parsing skills cache: $e');
         }
       }
 
@@ -91,7 +91,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       };
       await prefs.setString(cacheKey, jsonEncode(cachePayload));
     } catch (e) {
-      print('Error loading world skills rankings: $e');
+      AppLogger.d('Error loading world skills rankings: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -148,7 +148,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         _signatureEvents = upcomingEvents;
       });
     } catch (e) {
-      print('Error loading signature events: $e');
+      AppLogger.d('Error loading signature events: $e');
     } finally {
       setState(() {
         _isLoadingEvents = false;
@@ -401,10 +401,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
               final score = scores?['score'] ?? 0;
               
               // Debug logging to see what data we have
-              print('🔍 Skills Team Debug: ${team.number} - Name: "${team.name}" - Organization: "${team.organization}"');
-              print('🔍 Skills Team Data: $teamData');
-              print('🔍 Team Number Debug: team.number = "${team.number}", isEmpty = ${team.number.isEmpty}');
-              print('🔍 Raw team data number field: ${teamData['team']} vs ${teamData['number']}');
+              AppLogger.d('🔍 Skills Team Debug: ${team.number} - Name: "${team.name}" - Organization: "${team.organization}"');
+              AppLogger.d('🔍 Skills Team Data: $teamData');
+              AppLogger.d('🔍 Team Number Debug: team.number = "${team.number}", isEmpty = ${team.number.isEmpty}');
+              AppLogger.d('🔍 Raw team data number field: ${teamData['team']} vs ${teamData['number']}');
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),

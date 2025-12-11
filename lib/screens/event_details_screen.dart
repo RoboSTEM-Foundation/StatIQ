@@ -134,10 +134,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             divisionId: divisionId,
           );
           
-          print('Loaded ${divisionMatches.length} matches for division: $divisionName');
+          AppLogger.d('Loaded ${divisionMatches.length} matches for division: $divisionName');
           return MapEntry(divisionId, divisionMatches);
         } catch (e) {
-          print('Error loading matches for division ${division['id']}: $e');
+          AppLogger.d('Error loading matches for division ${division['id']}: $e');
           return MapEntry(division['id'] as int, <dynamic>[]);
         }
       });
@@ -237,10 +237,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             divisionId: divisionId,
           );
           
-          print('Loaded ${divisionRankings.length} rankings for division: $divisionName');
+          AppLogger.d('Loaded ${divisionRankings.length} rankings for division: $divisionName');
           return MapEntry(divisionId, divisionRankings);
         } catch (e) {
-          print('Error loading rankings for division ${division['id']}: $e');
+          AppLogger.d('Error loading rankings for division ${division['id']}: $e');
           return MapEntry(division['id'] as int, <dynamic>[]);
         }
       });
@@ -1383,7 +1383,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
             pastMatches.add(match);
           }
         } catch (e) {
-          print('Error parsing match time: $e');
+          AppLogger.d('Error parsing match time: $e');
           noTimeMatches.add(match);
         }
       } else {
@@ -1562,7 +1562,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           isUpcoming = true;
         }
       } catch (e) {
-        print('Error parsing match time: $e');
+        AppLogger.d('Error parsing match time: $e');
         timeString = 'Unknown';
       }
     } else {
@@ -2388,7 +2388,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         'teamworkMatches': teamworkMatches,
       };
     } catch (e) {
-      print('Error getting team additional stats: $e');
+      AppLogger.d('Error getting team additional stats: $e');
       return {
         'combinedSkills': 0,
         'avgTeamworkPoints': 0.0,
@@ -2694,12 +2694,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     final teamData = ranking['team'];
     
     // Debug: Print the actual ranking data structure
-    print('🔍 VEX IQ Ranking Data Structure:');
-    print('  Keys: ${ranking.keys.toList()}');
-    print('  Full ranking: $ranking');
-    print('🔍 Team Data: $teamData');
+    AppLogger.d('🔍 VEX IQ Ranking Data Structure:');
+    AppLogger.d('  Keys: ${ranking.keys.toList()}');
+    AppLogger.d('  Full ranking: $ranking');
+    AppLogger.d('🔍 Team Data: $teamData');
     if (teamData is Map) {
-      print('  Team keys: ${teamData.keys.toList()}');
+      AppLogger.d('  Team keys: ${teamData.keys.toList()}');
     }
     final teamNumber = (teamData is Map) 
         ? (teamData['name']?.toString() ?? 
@@ -2727,8 +2727,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     }
     
     // Debug: Print all ranking data fields
-    print('🔍 Ranking data fields: ${ranking.keys.toList()}');
-    print('🔍 Ranking values: $ranking');
+    AppLogger.d('🔍 Ranking data fields: ${ranking.keys.toList()}');
+    AppLogger.d('🔍 Ranking values: $ranking');
     
     // VEX IQ rankings data - use correct field names from API
     final wins = ranking['wins'] ?? 0;
@@ -2967,13 +2967,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       if (teamData != null) {
         final teamName = (teamData['name'] ?? '').toString();
         if (teamName.isNotEmpty) {
-          print('✅ Found team name in cache: $teamNumber -> $teamName');
+          AppLogger.d('✅ Found team name in cache: $teamNumber -> $teamName');
           return teamName;
         }
       }
-      print('⚠️ No team name found in cache for $teamNumber');
+      AppLogger.d('⚠️ No team name found in cache for $teamNumber');
       } catch (e) {
-      print('❌ Error searching cached team database for $teamNumber: $e');
+      AppLogger.d('❌ Error searching cached team database for $teamNumber: $e');
     }
     return '';
   }
@@ -2987,7 +2987,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         for (final teamData in searchResults) {
           final cachedTeamNumber = (teamData['number'] ?? '').toString();
           if (cachedTeamNumber.toLowerCase() == teamNumber.toLowerCase()) {
-            print('✅ Found full team data in cache for $teamNumber');
+            AppLogger.d('✅ Found full team data in cache for $teamNumber');
             return Team(
               id: teamData['id'] ?? 0,
               number: teamData['number'] ?? '',
@@ -3003,9 +3003,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           }
         }
       }
-      print('⚠️ No full team data found in cache for $teamNumber');
+      AppLogger.d('⚠️ No full team data found in cache for $teamNumber');
       } catch (e) {
-      print('❌ Error searching cached team database for $teamNumber: $e');
+      AppLogger.d('❌ Error searching cached team database for $teamNumber: $e');
     }
     return null;
   }
@@ -3052,7 +3052,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         );
       }
       } catch (e) {
-      print('❌ Error navigating to team details: $e');
+      AppLogger.d('❌ Error navigating to team details: $e');
       // Show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3940,11 +3940,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         }
         
         // Debug: Print award data structure
-        print('🔍 Award data: $award');
-        print('🔍 Team winners: $teamWinners');
-        print('🔍 Teams: $teams');
-        print('🔍 Individual winners: $individualWinners');
-        print('🔍 Winner labels: $winnerLabels');
+        AppLogger.d('🔍 Award data: $award');
+        AppLogger.d('🔍 Team winners: $teamWinners');
+        AppLogger.d('🔍 Teams: $teams');
+        AppLogger.d('🔍 Individual winners: $individualWinners');
+        AppLogger.d('🔍 Winner labels: $winnerLabels');
         
         final teamDisplay = winnerLabels.isNotEmpty
             ? winnerLabels.join(' & ')
@@ -4580,7 +4580,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         futureMatchesWithUserTeam.add({'match': match, 'scheduledTime': matchDateTime});
       }
     }
-    print('📱 Found ${futureMatchesWithUserTeam.length} future matches with team $userTeamNumber in event ${widget.event.id}');
+    AppLogger.d('📱 Found ${futureMatchesWithUserTeam.length} future matches with team $userTeamNumber in event ${widget.event.id}');
     await NotificationService().cancelAllMatchNotifications();
     for (final matchInfo in futureMatchesWithUserTeam) {
       final match = matchInfo['match'] as Map<String, dynamic>;
@@ -4604,10 +4604,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           teamNumber: userTeamNumber,
         );
       } catch (e) {
-        print('❌ Error scheduling notification for match: $e');
+        AppLogger.d('❌ Error scheduling notification for match: $e');
       }
     }
-    print('✅ Scheduled ${futureMatchesWithUserTeam.length} notifications for event');
+    AppLogger.d('✅ Scheduled ${futureMatchesWithUserTeam.length} notifications for event');
   }
 
   List<Map<String, dynamic>> _getNext5MatchesForTeam(String teamNumber) {

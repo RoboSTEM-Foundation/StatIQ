@@ -32,27 +32,27 @@ class OptimizedTeamSearch {
       final prefs = await SharedPreferences.getInstance();
       final cachedTeamsString = prefs.getString(_teamListKey);
       
-      print('🔍 Checking for cached team data...');
-      print('📊 Cached data length: ${cachedTeamsString?.length ?? 0}');
+      AppLogger.d('🔍 Checking for cached team data...');
+      AppLogger.d('📊 Cached data length: ${cachedTeamsString?.length ?? 0}');
       
       if (cachedTeamsString != null) {
-        print('📥 Parsing cached team data...');
+        AppLogger.d('📥 Parsing cached team data...');
         final Map<String, dynamic> data = json.decode(cachedTeamsString);
         _allTeams = List<Map<String, dynamic>>.from(data['teams'] ?? []);
         
-        print('📊 Parsed ${_allTeams.length} teams from cache');
+        AppLogger.d('📊 Parsed ${_allTeams.length} teams from cache');
         
         // Build indexes in background to avoid blocking UI
         await _buildIndexesAsync();
         
         _isInitialized = true;
-        print('🚀 OptimizedTeamSearch initialized with ${_allTeams.length} teams');
+        AppLogger.d('🚀 OptimizedTeamSearch initialized with ${_allTeams.length} teams');
       } else {
         _allTeams = [];
-        print('⚠️ OptimizedTeamSearch: No cached team list found');
+        AppLogger.d('⚠️ OptimizedTeamSearch: No cached team list found');
       }
     } catch (e) {
-      print('❌ Error initializing optimized search: $e');
+      AppLogger.d('❌ Error initializing optimized search: $e');
       _allTeams = [];
     }
   }
@@ -60,8 +60,8 @@ class OptimizedTeamSearch {
   /// Build search indexes asynchronously
   static Future<void> _buildIndexesAsync() async {
     try {
-      print('🔨 Building search indexes...');
-      print('📊 Total teams to index: ${_allTeams.length}');
+      AppLogger.d('🔨 Building search indexes...');
+      AppLogger.d('📊 Total teams to index: ${_allTeams.length}');
       final stopwatch = Stopwatch()..start();
       
       _indexingProgress = 0.0;
@@ -76,7 +76,7 @@ class OptimizedTeamSearch {
         _indexingStatus = 'No teams to index';
         _indexingProgress = 1.0;
         _indexesBuilt = true;
-        print('⚠️ No teams available for indexing');
+        AppLogger.d('⚠️ No teams available for indexing');
         return;
       }
       
@@ -133,8 +133,8 @@ class OptimizedTeamSearch {
               _cityIndex.putIfAbsent(city, () => []).add(j);
             }
           } catch (e) {
-            print('❌ Error indexing team at index $j: $e');
-            print('📊 Team data: ${_allTeams[j].toString()}');
+            AppLogger.d('❌ Error indexing team at index $j: $e');
+            AppLogger.d('📊 Team data: ${_allTeams[j].toString()}');
             continue; // Skip this team and continue with the next one
           }
         }
@@ -161,10 +161,10 @@ class OptimizedTeamSearch {
       _indexesBuilt = true;
       _indexingStatus = 'Ready!';
       
-      print('✅ Indexes built in ${stopwatch.elapsedMilliseconds}ms');
-      print('📊 Index stats: ${_numberIndex.length} numbers, ${_nameIndex.length} names, ${_orgIndex.length} orgs, ${_cityIndex.length} cities');
+      AppLogger.d('✅ Indexes built in ${stopwatch.elapsedMilliseconds}ms');
+      AppLogger.d('📊 Index stats: ${_numberIndex.length} numbers, ${_nameIndex.length} names, ${_orgIndex.length} orgs, ${_cityIndex.length} cities');
     } catch (e) {
-      print('❌ Error building indexes: $e');
+      AppLogger.d('❌ Error building indexes: $e');
       _indexingStatus = 'Indexing failed: $e';
       _indexingProgress = 0.0;
       _indexesBuilt = false;
@@ -277,7 +277,7 @@ class OptimizedTeamSearch {
   
   /// Clear all cached data
   static Future<void> clearCache() async {
-    print('🧹 Clearing OptimizedTeamSearch cache...');
+    AppLogger.d('🧹 Clearing OptimizedTeamSearch cache...');
     
     // Clear all data
     _allTeams.clear();
@@ -292,6 +292,6 @@ class OptimizedTeamSearch {
     _indexingProgress = 0.0;
     _indexingStatus = 'Not started';
     
-    print('🧹 OptimizedTeamSearch cache cleared');
+    AppLogger.d('🧹 OptimizedTeamSearch cache cleared');
   }
 }
