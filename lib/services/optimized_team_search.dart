@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stat_iq/utils/logger.dart';
 
 /// Highly optimized search for 26,000+ teams
 /// Uses pre-built indexes and efficient data structures

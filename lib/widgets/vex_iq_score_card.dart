@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
+import 'package:stat_iq/utils/logger.dart';
 import '../models/team.dart';
 import '../services/vex_iq_scoring.dart';
 import '../services/robotevents_api.dart';
@@ -138,18 +139,16 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
         seasonId: teamData['seasonId'],
       );
 
-      // Get score breakdown if needed
+      // Always load breakdown for info button (preload for faster dialog opening)
       Map<String, dynamic>? breakdown;
-      if (widget.showBreakdown) {
-        breakdown = await VEXIQScoring.getScoreBreakdown(
-          team: widget.team,
-          worldSkillsData: teamData['worldSkills'],
-          eventsData: teamData['events'],
-          awardsData: teamData['awards'],
-          rankingsData: teamData['rankings'],
-          seasonId: teamData['seasonId'],
-        );
-      }
+      breakdown = await VEXIQScoring.getScoreBreakdown(
+        team: widget.team,
+        worldSkillsData: teamData['worldSkills'],
+        eventsData: teamData['events'],
+        awardsData: teamData['awards'],
+        rankingsData: teamData['rankings'],
+        seasonId: teamData['seasonId'],
+      );
 
       if (mounted) {
         setState(() {
@@ -270,6 +269,19 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(width: AppConstants.spacingS),
+              InkWell(
+                onTap: () => _showBreakdownDialog(context),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: ThemeUtils.getSecondaryTextColor(context),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppConstants.spacingXS),
@@ -306,14 +318,14 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
           ),
           if (widget.showBreakdown && _scoreBreakdown != null) ...[
             const SizedBox(height: AppConstants.spacingM),
-            _buildScoreBreakdown(),
+            _buildInlineBreakdown(),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildScoreBreakdown() {
+  Widget _buildInlineBreakdown() {
     if (_scoreBreakdown == null) return const SizedBox();
 
     return Column(
@@ -331,6 +343,11 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
           'World Skills Ranking',
           _scoreBreakdown!['worldSkillsRanking'],
         ),
+        if (_scoreBreakdown!['trueskillRating']['score'] > 0)
+          _buildBreakdownItem(
+            'TrueSkill Rating',
+            _scoreBreakdown!['trueskillRating'],
+          ),
         _buildBreakdownItem(
           'Skills Score Quality',
           _scoreBreakdown!['skillsQuality'],
@@ -424,7 +441,7 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
           Text(
             description,
             style: AppConstants.caption.copyWith(
-              color: AppConstants.textSecondary,
+              color: ThemeUtils.getSecondaryTextColor(context),
             ),
           ),
           if (data.containsKey('ranking') && data['ranking'] > 0) ...[
@@ -463,6 +480,238 @@ class _VEXIQScoreCardState extends State<VEXIQScoreCard> {
               ),
             ),
           ],
+          if (data.containsKey('mu') && data['mu'] > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              'TrueSkill μ: ${(data['mu'] as double).toStringAsFixed(2)}, σ: ${(data['sigma'] as double).toStringAsFixed(2)}',
+              style: AppConstants.caption.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+          if (data.containsKey('teamworkMatches') && data['teamworkMatches'] > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Teamwork Matches: ${data['teamworkMatches']}',
+              style: AppConstants.caption.copyWith(
+                color: ThemeUtils.getSecondaryTextColor(context),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBreakdownDialog(BuildContext context) async {
+    // Show loading dialog first if breakdown not ready
+    if (_scoreBreakdown == null && !_isLoading) {
+      if (!mounted) return;
+      
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: AppConstants.spacingM),
+              Text('Loading breakdown...'),
+            ],
+          ),
+        ),
+      );
+      
+      try {
+        final teamData = await RobotEventsAPI.getComprehensiveTeamData(
+          team: widget.team,
+          seasonId: widget.seasonId,
+        );
+
+        final breakdown = await VEXIQScoring.getScoreBreakdown(
+          team: widget.team,
+          worldSkillsData: teamData['worldSkills'],
+          eventsData: teamData['events'],
+          awardsData: teamData['awards'],
+          rankingsData: teamData['rankings'],
+          seasonId: teamData['seasonId'],
+        );
+
+        if (mounted) {
+          setState(() {
+            _scoreBreakdown = breakdown;
+          });
+          
+          // Close loading dialog
+          Navigator.of(context).pop();
+          
+          // Show breakdown dialog
+          _showBreakdownContent(context);
+        }
+      } catch (e) {
+        AppLogger.d('Error loading breakdown: $e');
+        if (mounted) {
+          // Close loading dialog
+          Navigator.of(context).pop();
+          
+          // Show error dialog
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Error'),
+              content: Text('Failed to load breakdown: $e'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } else if (_scoreBreakdown != null) {
+      // Breakdown already loaded, show dialog immediately
+      _showBreakdownContent(context);
+    } else {
+      // Still loading, show loading dialog
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: AppConstants.spacingM),
+              Text('Loading breakdown...'),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+  
+  void _showBreakdownContent(BuildContext context) {
+    if (!mounted || _scoreBreakdown == null) return;
+    
+    final score = double.tryParse(_vexIQScore ?? '0') ?? 0.0;
+    final tier = VEXIQScoring.getPerformanceTier(score);
+    final tierColor = VEXIQScoring.getTierColor(tier);
+    final tierTextColor = _getTierTextColor(tierColor, context);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.analytics, color: AppConstants.vexIQOrange),
+            const SizedBox(width: AppConstants.spacingS),
+            Text(
+              'statIQ Score Breakdown',
+              style: AppConstants.headline6.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppConstants.spacingM),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      tierColor.withOpacity(0.1),
+                      tierColor.withOpacity(0.05),
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusM),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total Score',
+                          style: AppConstants.bodyText2.copyWith(
+                            color: ThemeUtils.getSecondaryTextColor(context),
+                          ),
+                        ),
+                        Text(
+                          '${_scoreBreakdown!['totalScore'].toStringAsFixed(1)} / ${_scoreBreakdown!['maxPossibleScore'].toStringAsFixed(1)}',
+                          style: AppConstants.headline6.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: tierTextColor,
+                          ),
+                        ),
+                        Text(
+                          '${_scoreBreakdown!['percentage'].toStringAsFixed(1)}% - $tier',
+                          style: AppConstants.bodyText2.copyWith(
+                            color: tierTextColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacingM),
+              _buildBreakdownItem(
+                'World Skills Ranking',
+                _scoreBreakdown!['worldSkillsRanking'],
+              ),
+              if (_scoreBreakdown!['trueskillRating']['score'] > 0)
+                _buildBreakdownItem(
+                  'TrueSkill Rating',
+                  _scoreBreakdown!['trueskillRating'],
+                ),
+              _buildBreakdownItem(
+                'Skills Score Quality',
+                _scoreBreakdown!['skillsQuality'],
+              ),
+              if (_scoreBreakdown!['skillsBalance']['score'] > 0)
+                _buildBreakdownItem(
+                  'Skills Balance Bonus',
+                  _scoreBreakdown!['skillsBalance'],
+                ),
+              _buildBreakdownItem(
+                'Competition Performance',
+                _scoreBreakdown!['competitionPerformance'],
+              ),
+              _buildBreakdownItem(
+                'Award Excellence',
+                _scoreBreakdown!['awardExcellence'],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );

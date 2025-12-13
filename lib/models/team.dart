@@ -1,5 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'event.dart';
+import 'package:stat_iq/utils/logger.dart';
 
 part 'team.g.dart';
 

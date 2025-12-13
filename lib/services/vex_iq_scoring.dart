@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:stat_iq/models/team.dart';
+import 'package:stat_iq/models/event.dart';
 import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
+import 'package:stat_iq/services/trueskill_scoring.dart';
 import 'package:stat_iq/utils/logger.dart';
 import 'package:flutter/material.dart';
 
@@ -22,23 +24,65 @@ class VEXIQScoring {
     double totalScore = 0.0;
     double maxScore = 100.0;
     
-    // Parse world skills data from API response or fetch from VexDB
-    Map<String, dynamic> worldSkills = await _parseWorldSkillsWithFallback(
-      worldSkillsData, 
-      team.number, 
+    // Get multi-season data for enhanced scoring
+    final multiSeasonData = await _getMultiSeasonData(team, seasonId);
+    
+    // Fetch actual world skills rankings to get true global position
+    Map<String, dynamic> worldSkills = await _getActualWorldSkillsRanking(
+      team, 
+      worldSkillsData,
       seasonId,
     );
     
     final hasSkillsData = !(worldSkills['estimated'] == true);
     
+    // Calculate TrueSkill ratings
+    List<Map<String, double>> trueskillRatings = [];
+    
+    if (hasSkillsData) {
+      // TrueSkill rating from actual world skills leaderboard
+      final skillsRating = await TrueSkillScoring.calculateSkillsRating(
+        teamNumber: team.number,
+        teamRanking: worldSkills['ranking'] ?? 0,
+        totalTeams: worldSkills['totalTeams'] ?? 0,
+        seasonId: seasonId,
+      );
+      trueskillRatings.add(skillsRating);
+      AppLogger.d('TrueSkill Skills Rating (World Rankings): mu=${skillsRating['mu']!.toStringAsFixed(2)}, sigma=${skillsRating['sigma']!.toStringAsFixed(2)}, ranking=${worldSkills['ranking']}/${worldSkills['totalTeams']}');
+    }
+    
+    // Get teamwork scores from all events (signature events + any event with 200+ teamwork scores)
+    final teamworkScores = await _getTeamworkScoresFromAllEvents(team, seasonId);
+    if (teamworkScores.isNotEmpty) {
+      final teamworkRating = await TrueSkillScoring.calculateTeamworkRating(
+        teamNumber: team.number,
+        teamworkScores: teamworkScores,
+      );
+      trueskillRatings.add(teamworkRating);
+      AppLogger.d('TrueSkill Teamwork Rating: mu=${teamworkRating['mu']!.toStringAsFixed(2)}, sigma=${teamworkRating['sigma']!.toStringAsFixed(2)}, matches=${teamworkRating['matches']}');
+    }
+    
+    // Combine TrueSkill ratings
+    final combinedRating = trueskillRatings.isNotEmpty
+        ? TrueSkillScoring.combineRatings(trueskillRatings)
+        : null;
+    
     if (hasSkillsData) {
       // Standard scoring with skills data
-      // 1. World Skills Ranking (30 points)
+      // 1. World Skills Ranking (35 points) - Increased weight for better assessment
       final worldSkillsScore = _calculateWorldSkillsRankingScore(worldSkills);
-      totalScore += worldSkillsScore;
-      AppLogger.d('World Skills Ranking Score: ${worldSkillsScore.toStringAsFixed(2)} / 30.0');
+      totalScore += worldSkillsScore * (35.0 / 30.0); // Scale up to 35 points
+      AppLogger.d('World Skills Ranking Score: ${(worldSkillsScore * 35.0 / 30.0).toStringAsFixed(2)} / 35.0');
       
-      // 2. Skills Score Quality (25 points) + Balance Bonus (5 points)
+      // 2. TrueSkill Rating Bonus (20 points) - Increased weight for better skill assessment
+      if (combinedRating != null) {
+        final trueskillBonus = (combinedRating['mu']! / 50.0) * 20.0;
+        totalScore += trueskillBonus;
+        maxScore += 20.0;
+        AppLogger.d('TrueSkill Rating Bonus: ${trueskillBonus.toStringAsFixed(2)} / 20.0');
+      }
+      
+      // 3. Skills Score Quality (25 points) + Balance Bonus (5 points)
       final skillsScores = await _calculateSkillsScoreQuality(worldSkills, seasonId: seasonId);
       totalScore += skillsScores['quality']!;
       totalScore += skillsScores['balance']!;
@@ -48,26 +92,49 @@ class VEXIQScoring {
       AppLogger.d('Skills Score Quality: ${skillsScores['quality']!.toStringAsFixed(2)} / 25.0');
       AppLogger.d('Skills Balance Bonus: ${skillsScores['balance']!.toStringAsFixed(2)} / 5.0');
       
-      // 3. Competition Performance (20 points)
-      final competitionScore = _calculateCompetitionPerformance(rankingsData);
+      // 4. Competition Performance (20 points) - enhanced with multi-season data
+      final competitionScore = await _calculateCompetitionPerformanceEnhanced(
+        rankingsData, 
+        multiSeasonData['rankings'],
+      );
       totalScore += competitionScore;
       AppLogger.d('Competition Performance: ${competitionScore.toStringAsFixed(2)} / 20.0');
       
-      // 4. Award Excellence (20 points)
-      final awardScore = _calculateAwardExcellence(awardsData);
+      // 5. Award Excellence (20 points) - enhanced with multi-season data
+      final awardScore = await _calculateAwardExcellenceEnhanced(
+        awardsData,
+        multiSeasonData['awards'],
+      );
       totalScore += awardScore;
       AppLogger.d('Award Excellence: ${awardScore.toStringAsFixed(2)} / 20.0');
+      
+      // 6. World Qualification & Achievement Bonuses (10 points)
+      final achievementBonus = await _calculateAchievementBonuses(
+        team,
+        eventsData,
+        multiSeasonData['events'],
+        seasonId,
+      );
+      totalScore += achievementBonus;
+      maxScore += 10.0;
+      AppLogger.d('Achievement Bonuses: ${achievementBonus.toStringAsFixed(2)} / 10.0');
     } else {
       // Enhanced scoring without skills data (redistribute weights)
       AppLogger.d('No skills data - using enhanced competition-based scoring');
       
-      // 1. Competition Performance (40 points - doubled weight)
-      final competitionScore = _calculateCompetitionPerformance(rankingsData) * 2.0;
+      // 1. Competition Performance (40 points - doubled weight) - enhanced with multi-season
+      final competitionScore = await _calculateCompetitionPerformanceEnhanced(
+        rankingsData,
+        multiSeasonData['rankings'],
+      ) * 2.0;
       totalScore += competitionScore;
       AppLogger.d('Enhanced Competition Performance: ${competitionScore.toStringAsFixed(2)} / 40.0');
       
-      // 2. Award Excellence (30 points - increased weight)
-      final awardScore = _calculateAwardExcellence(awardsData) * 1.5;
+      // 2. Award Excellence (30 points - increased weight) - enhanced with multi-season
+      final awardScore = await _calculateAwardExcellenceEnhanced(
+        awardsData,
+        multiSeasonData['awards'],
+      ) * 1.5;
       totalScore += awardScore;
       AppLogger.d('Enhanced Award Excellence: ${awardScore.toStringAsFixed(2)} / 30.0');
       
@@ -91,6 +158,284 @@ class VEXIQScoring {
     AppLogger.d('=== End statIQ Score Calculation ===');
     
     return percentage.toStringAsFixed(1);
+  }
+  
+  /// Get data from multiple seasons for enhanced scoring
+  static Future<Map<String, dynamic>> _getMultiSeasonData(Team team, int? currentSeasonId) async {
+    final currentSeason = currentSeasonId ?? ApiConfig.getSelectedSeasonId();
+    final allRankings = <dynamic>[];
+    final allAwards = <dynamic>[];
+    
+    // Get data from current season and past 2 seasons
+    final seasonsToCheck = [
+      currentSeason, // Current season
+      189, // Rapid Relay 2024-2025
+      180, // Full Volume 2023-2024
+    ];
+    
+    for (final seasonId in seasonsToCheck) {
+      if (seasonId == currentSeason) {
+        // Current season data is already provided, skip
+        continue;
+      }
+      
+      try {
+        // Fetch rankings and awards from past seasons
+        final pastRankings = await RobotEventsAPI.getTeamRankings(
+          teamId: team.id,
+          seasonId: seasonId,
+        );
+        final pastAwards = await RobotEventsAPI.getTeamAwards(
+          teamId: team.id,
+          seasonId: seasonId,
+        );
+        
+        allRankings.addAll(pastRankings);
+        allAwards.addAll(pastAwards);
+        
+        AppLogger.d('Fetched ${pastRankings.length} rankings and ${pastAwards.length} awards from season $seasonId');
+      } catch (e) {
+        AppLogger.d('Error fetching data from season $seasonId: $e');
+      }
+    }
+    
+    return {
+      'rankings': allRankings,
+      'awards': allAwards,
+    };
+  }
+  
+  /// Get teamwork scores from all events (signature events + any event with 200+ teamwork scores)
+  static Future<List<Map<String, dynamic>>> _getTeamworkScoresFromAllEvents(
+    Team team,
+    int? seasonId,
+  ) async {
+    final teamworkScores = <Map<String, dynamic>>[];
+    const minTeamworkScore = 200.0; // Minimum score threshold
+    
+    try {
+      // Get team events
+      final events = await RobotEventsAPI.getTeamEvents(
+        teamId: team.id,
+        seasonId: seasonId ?? ApiConfig.getSelectedSeasonId(),
+      );
+      
+      // Separate signature events and regular events
+      final signatureEvents = events.where((event) {
+        final eventName = event.name.toLowerCase();
+        return eventName.contains('signature');
+      }).toList();
+      
+      final regularEvents = events.where((event) {
+        final eventName = event.name.toLowerCase();
+        return !eventName.contains('signature');
+      }).toList();
+      
+      AppLogger.d('Found ${signatureEvents.length} signature events and ${regularEvents.length} regular events for team ${team.number}');
+      
+      // Process all events (signature events always included, regular events only if 200+)
+      final eventsToProcess = <Event>[];
+      eventsToProcess.addAll(signatureEvents);
+      eventsToProcess.addAll(regularEvents);
+      
+      // Create a set of signature event IDs for quick lookup
+      final signatureEventIds = signatureEvents.map((e) => e.id).toSet();
+      
+      // For each event, get teamwork match scores
+      for (final event in eventsToProcess) {
+        try {
+          final isSignatureEvent = signatureEventIds.contains(event.id);
+          final eventDetails = await RobotEventsAPI.getEventDetails(eventId: event.id);
+          final divisions = eventDetails['divisions'] as List<dynamic>? ?? [];
+          
+          for (final division in divisions) {
+            final divisionId = division['id'] as int?;
+            if (divisionId == null) continue;
+            
+            final matches = await RobotEventsAPI.getEventMatches(
+              eventId: event.id,
+              divisionId: divisionId,
+            );
+            
+            // Find teamwork matches
+            for (final match in matches) {
+              final matchName = (match['name'] as String? ?? '').toLowerCase();
+              if (matchName.contains('teamwork') || matchName.contains('team work')) {
+                final alliances = match['alliances'] as List<dynamic>? ?? [];
+                
+                for (final alliance in alliances) {
+                  final teams = alliance['teams'] as List<dynamic>? ?? [];
+                  final allianceScore = (alliance['score'] as num?)?.toDouble() ?? 0.0;
+                  
+                  // Check if this team is in this alliance
+                  bool teamInAlliance = false;
+                  for (final teamData in teams) {
+                    final teamInfo = teamData['team'] as Map<String, dynamic>?;
+                    final teamNumber = (teamInfo?['name'] as String? ?? '').toUpperCase();
+                    if (teamNumber == team.number.toUpperCase()) {
+                      teamInAlliance = true;
+                      break;
+                    }
+                  }
+                  
+                  // Include score if:
+                  // 1. Team is in alliance AND
+                  // 2. (It's a signature event OR score is 200+)
+                  if (teamInAlliance && allianceScore > 0) {
+                    if (isSignatureEvent || allianceScore >= minTeamworkScore) {
+                      teamworkScores.add({
+                        'score': allianceScore,
+                        'eventId': event.id,
+                        'eventName': event.name,
+                        'matchName': match['name'] ?? 'Unknown',
+                        'isSignature': isSignatureEvent,
+                      });
+                      AppLogger.d('Added teamwork score: ${allianceScore} from ${isSignatureEvent ? "signature" : "regular"} event ${event.name}');
+                    } else {
+                      AppLogger.d('Skipped teamwork score: ${allianceScore} (below ${minTeamworkScore} threshold) from ${event.name}');
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          AppLogger.d('Error getting teamwork scores from event ${event.id}: $e');
+        }
+      }
+      
+      AppLogger.d('Found ${teamworkScores.length} teamwork scores (${teamworkScores.where((s) => s['isSignature'] == true).length} from signature events, ${teamworkScores.where((s) => s['isSignature'] == false).length} from regular events with 200+ scores) for team ${team.number}');
+    } catch (e) {
+      AppLogger.d('Error getting teamwork scores: $e');
+    }
+    
+    return teamworkScores;
+  }
+  
+  /// Enhanced competition performance calculation with multi-season data
+  static Future<double> _calculateCompetitionPerformanceEnhanced(
+    List<dynamic>? currentRankings,
+    List<dynamic>? pastRankings,
+  ) async {
+    final allRankings = <dynamic>[];
+    if (currentRankings != null) allRankings.addAll(currentRankings);
+    if (pastRankings != null) allRankings.addAll(pastRankings);
+    
+    return _calculateCompetitionPerformance(allRankings);
+  }
+  
+  /// Enhanced award excellence calculation with multi-season data
+  static Future<double> _calculateAwardExcellenceEnhanced(
+    List<dynamic>? currentAwards,
+    List<dynamic>? pastAwards,
+  ) async {
+    final allAwards = <dynamic>[];
+    if (currentAwards != null) allAwards.addAll(currentAwards);
+    if (pastAwards != null) allAwards.addAll(pastAwards);
+    
+    return _calculateAwardExcellence(allAwards);
+  }
+  
+  /// Get actual world skills ranking by fetching global leaderboard and finding team position
+  static Future<Map<String, dynamic>> _getActualWorldSkillsRanking(
+    Team team,
+    List<dynamic>? worldSkillsData,
+    int? seasonId,
+  ) async {
+    try {
+      final targetSeasonId = seasonId ?? ApiConfig.getSelectedSeasonId();
+      AppLogger.d('Fetching actual world skills rankings for team ${team.number}');
+      
+      // Fetch world skills rankings (multiple pages to find team)
+      final allRankings = <dynamic>[];
+      int teamRanking = 0;
+      Map<String, dynamic>? teamSkillsEntry;
+      
+      // Search through multiple pages to find the team
+      for (int page = 1; page <= 10; page++) {
+        final pageData = await RobotEventsAPI.getWorldSkillsRankings(
+          seasonId: targetSeasonId,
+          page: page,
+        );
+        
+        if (pageData.isEmpty) break;
+        
+        // Search for team in this page
+        for (final entry in pageData) {
+          final teamNumber = (entry['team']?['number'] ?? entry['team_number'] ?? '').toString().toUpperCase();
+          if (teamNumber == team.number.toUpperCase()) {
+            teamSkillsEntry = entry;
+            teamRanking = allRankings.length + pageData.indexOf(entry) + 1;
+            AppLogger.d('Found team ${team.number} at world ranking #$teamRanking');
+            break;
+          }
+        }
+        
+        if (teamSkillsEntry != null) break; // Found team, stop searching
+        
+        allRankings.addAll(pageData);
+        
+        // If we got less than full page, we've reached the end
+        if (pageData.length < ApiConfig.defaultPageSize) break;
+      }
+      
+      // If we found the team in world rankings, use that data
+      if (teamSkillsEntry != null && teamRanking > 0) {
+        final totalTeams = allRankings.length + (teamRanking > allRankings.length ? 1 : 0);
+        // Estimate total teams if we didn't reach the end (add buffer)
+        final estimatedTotal = totalTeams < 100 ? 1000 : totalTeams;
+        
+        return {
+          'ranking': teamRanking,
+          'combined': _safeIntConvert(
+            teamSkillsEntry['scores']?['score'] ?? 
+            teamSkillsEntry['score'] ?? 
+            teamSkillsEntry['combined'] ?? 0
+          ),
+          'driver': _safeIntConvert(
+            teamSkillsEntry['scores']?['driver'] ?? 
+            teamSkillsEntry['driver'] ?? 0
+          ),
+          'programming': _safeIntConvert(
+            teamSkillsEntry['scores']?['programming'] ?? 
+            teamSkillsEntry['programming'] ?? 0
+          ),
+          'totalTeams': estimatedTotal,
+          'fromWorldRankings': true,
+        };
+      }
+      
+      // Fallback: Try parsing provided skills data (event-level)
+      if (worldSkillsData != null && worldSkillsData.isNotEmpty) {
+        AppLogger.d('Team not found in world rankings, using event-level skills data');
+        return _parseWorldSkills(worldSkillsData);
+      }
+      
+      // No data available
+      AppLogger.d('No skills data available - using competition performance estimate');
+      return {
+        'ranking': 0,
+        'combined': 0,
+        'driver': 0,
+        'programming': 0,
+        'totalTeams': 0,
+        'estimated': true,
+      };
+    } catch (e) {
+      AppLogger.d('Error fetching world skills ranking: $e');
+      // Fallback to parsing provided data
+      if (worldSkillsData != null && worldSkillsData.isNotEmpty) {
+        return _parseWorldSkills(worldSkillsData);
+      }
+      return {
+        'ranking': 0,
+        'combined': 0,
+        'driver': 0,
+        'programming': 0,
+        'totalTeams': 0,
+        'estimated': true,
+      };
+    }
   }
   
     // Parse world skills data with enhanced fallback
@@ -250,21 +595,30 @@ class VEXIQScoring {
                 'Balance Bonus: ${balanceBonus.toStringAsFixed(2)}');
         }
       } else {
-        // Fallback to adaptive fixed thresholds based on season progression
-        AppLogger.d('No season context available - using adaptive thresholds');
-        final adaptiveThreshold = _getAdaptiveScoreThreshold(seasonId);
-        final normalizedScore = (combined / adaptiveThreshold).clamp(0.0, 1.0);
-      qualityScore = normalizedScore * 25.0;
-      
-        AppLogger.d('Adaptive scoring - Threshold: $adaptiveThreshold, '
-              'Normalized: ${normalizedScore.toStringAsFixed(3)}, '
-              'Quality Score: ${qualityScore.toStringAsFixed(2)}');
+        // Fallback: Use ranking-based scoring instead of fixed threshold
+        AppLogger.d('No season context available - using ranking-based scoring');
+        final ranking = _safeIntConvert(worldSkills['ranking']);
+        final totalTeams = _safeIntConvert(worldSkills['totalTeams']);
+        
+        if (ranking > 0 && totalTeams > 0) {
+          // Calculate percentile based on ranking (better ranking = higher percentile)
+          final percentile = (totalTeams - ranking + 1) / totalTeams;
+          qualityScore = percentile * 25.0;
+          
+          AppLogger.d('Ranking-based scoring - Ranking: $ranking, Total Teams: $totalTeams, '
+                'Percentile: ${(percentile * 100).toStringAsFixed(1)}%, '
+                'Quality Score: ${qualityScore.toStringAsFixed(2)}');
+        } else {
+          // If no ranking data, use a conservative estimate
+          AppLogger.d('No ranking data available - using conservative estimate');
+          qualityScore = 10.0; // Default to middle-low score
+        }
       
         // Standard balance bonus for fallback
-      if (driver > 0 && programming > 0) {
-        final maxSkill = driver > programming ? driver : programming;
-        final balance = 1.0 - (driver - programming).abs() / maxSkill;
-        balanceBonus = balance * 5.0;
+        if (driver > 0 && programming > 0) {
+          final maxSkill = driver > programming ? driver : programming;
+          final balance = 1.0 - (driver - programming).abs() / maxSkill;
+          balanceBonus = balance * 5.0;
         }
       }
     } else {
@@ -529,6 +883,93 @@ class VEXIQScoring {
   }
   
   // 6. Consistency Bonus (15 points) - For when skills data unavailable
+  /// Calculate achievement bonuses (world qualification, etc.)
+  static Future<double> _calculateAchievementBonuses(
+    Team team,
+    List<dynamic>? currentEvents,
+    List<dynamic>? pastEvents,
+    int? seasonId,
+  ) async {
+    double bonus = 0.0;
+    
+    try {
+      // Combine all events from current and past seasons
+      final allEvents = <dynamic>[];
+      if (currentEvents != null) allEvents.addAll(currentEvents);
+      if (pastEvents != null) allEvents.addAll(pastEvents);
+      
+      // Check for world championship qualification/participation
+      bool qualifiedForWorlds = false;
+      bool participatedInWorlds = false;
+      
+      for (final event in allEvents) {
+        final eventName = (event['name'] ?? event.name ?? '').toString().toLowerCase();
+        final eventLevel = (event['level'] ?? event.level ?? '').toString().toLowerCase();
+        
+        // Check if it's a world championship event
+        if (eventName.contains('world') || 
+            eventName.contains('championship') && eventName.contains('world') ||
+            eventLevel.contains('world')) {
+          participatedInWorlds = true;
+          qualifiedForWorlds = true;
+          AppLogger.d('Found world championship participation: ${event['name'] ?? event.name}');
+        }
+      }
+      
+      // Bonus for world qualification/participation
+      if (qualifiedForWorlds) {
+        bonus += 5.0; // 5 points for qualifying/participating in worlds
+        AppLogger.d('World qualification bonus: +5.0');
+      }
+      
+      // Check for previous season world qualification (if current season data doesn't show it)
+      if (!qualifiedForWorlds && seasonId != null) {
+        final previousSeasons = [189, 180]; // Rapid Relay, Full Volume
+        for (final pastSeasonId in previousSeasons) {
+          if (pastSeasonId == seasonId) continue; // Skip current season
+          
+          try {
+            final pastEvents = await RobotEventsAPI.getTeamEvents(
+              teamId: team.id,
+              seasonId: pastSeasonId,
+            );
+            
+            for (final event in pastEvents) {
+              final eventName = event.name.toLowerCase();
+              if (eventName.contains('world') || 
+                  (eventName.contains('championship') && eventName.contains('world'))) {
+                bonus += 3.0; // 3 points for previous season world qualification
+                AppLogger.d('Previous season world qualification bonus (season $pastSeasonId): +3.0');
+                break; // Only count once per season
+              }
+            }
+          } catch (e) {
+            AppLogger.d('Error checking past season $pastSeasonId for world qualification: $e');
+          }
+        }
+      }
+      
+      // Bonus for multiple signature events (shows consistent high-level performance)
+      int signatureEventCount = 0;
+      for (final event in allEvents) {
+        final eventName = (event['name'] ?? event.name ?? '').toString().toLowerCase();
+        if (eventName.contains('signature')) {
+          signatureEventCount++;
+        }
+      }
+      
+      if (signatureEventCount >= 3) {
+        bonus += 2.0; // 2 points for 3+ signature events
+        AppLogger.d('Multiple signature events bonus ($signatureEventCount events): +2.0');
+      }
+      
+    } catch (e) {
+      AppLogger.d('Error calculating achievement bonuses: $e');
+    }
+    
+    return bonus.clamp(0.0, 10.0); // Cap at 10 points
+  }
+  
   static double _calculateConsistencyBonus(List<dynamic>? rankingsData) {
     if (rankingsData == null || rankingsData.isEmpty) {
       return 0.0;
@@ -609,35 +1050,89 @@ class VEXIQScoring {
     List<dynamic>? rankingsData,
     int? seasonId,
   }) async {
-    final worldSkills = await _parseWorldSkillsWithFallback(
+    final worldSkills = await _getActualWorldSkillsRanking(
+      team,
       worldSkillsData,
-      team.number,
       seasonId,
     );
     
+    // Get multi-season data
+    final multiSeasonData = await _getMultiSeasonData(team, seasonId);
+    
+    // Calculate TrueSkill ratings
+    List<Map<String, double>> trueskillRatings = [];
+    final hasSkillsData = !(worldSkills['estimated'] == true);
+    
+    if (hasSkillsData) {
+      final skillsRating = await TrueSkillScoring.calculateSkillsRating(
+        teamNumber: team.number,
+        teamRanking: worldSkills['ranking'] ?? 0,
+        totalTeams: worldSkills['totalTeams'] ?? 0,
+        seasonId: seasonId,
+      );
+      trueskillRatings.add(skillsRating);
+    }
+    
+    final teamworkScores = await _getTeamworkScoresFromAllEvents(team, seasonId);
+    if (teamworkScores.isNotEmpty) {
+      final teamworkRating = await TrueSkillScoring.calculateTeamworkRating(
+        teamNumber: team.number,
+        teamworkScores: teamworkScores,
+      );
+      trueskillRatings.add(teamworkRating);
+    }
+    
+    final combinedRating = trueskillRatings.isNotEmpty
+        ? TrueSkillScoring.combineRatings(trueskillRatings)
+        : null;
+    
     // Calculate individual components
     final worldSkillsScore = _calculateWorldSkillsRankingScore(worldSkills);
+    final scaledWorldSkillsScore = hasSkillsData ? worldSkillsScore * (35.0 / 30.0) : 0.0;
+    final trueskillBonus = combinedRating != null ? (combinedRating['mu']! / 50.0) * 20.0 : 0.0;
     final skillsScores = await _calculateSkillsScoreQuality(worldSkills, seasonId: seasonId);
-    final competitionScore = _calculateCompetitionPerformance(rankingsData);
-    final awardScore = _calculateAwardExcellence(awardsData);
+    final competitionScore = await _calculateCompetitionPerformanceEnhanced(
+      rankingsData,
+      multiSeasonData['rankings'],
+    );
+    final awardScore = await _calculateAwardExcellenceEnhanced(
+      awardsData,
+      multiSeasonData['awards'],
+    );
+    final achievementBonus = await _calculateAchievementBonuses(
+      team,
+      eventsData,
+      multiSeasonData['events'],
+      seasonId,
+    );
     
-    final totalScore = worldSkillsScore + skillsScores['quality']! + 
-                      skillsScores['balance']! + competitionScore + awardScore;
-    final maxScore = 100.0 + (skillsScores['balance']! > 0 ? 5.0 : 0.0);
+    final totalScore = scaledWorldSkillsScore + trueskillBonus + skillsScores['quality']! + 
+                      skillsScores['balance']! + competitionScore + awardScore + achievementBonus;
+    final maxScore = 100.0 + (skillsScores['balance']! > 0 ? 5.0 : 0.0) + (trueskillBonus > 0 ? 20.0 : 0.0) + (achievementBonus > 0 ? 10.0 : 0.0);
     
     return {
       'worldSkillsRanking': {
-        'score': worldSkillsScore,
-        'maxScore': 30.0,
-        'description': 'Percentile ranking among all teams',
+        'score': scaledWorldSkillsScore,
+        'maxScore': 35.0,
+        'description': 'Percentile ranking among all teams (from world leaderboard)',
         'ranking': worldSkills['ranking'],
         'totalTeams': worldSkills['totalTeams'],
+      },
+      'trueskillRating': {
+        'score': trueskillBonus,
+        'maxScore': 20.0,
+        'description': 'TrueSkill rating based on skills leaderboard and teamwork performance',
+        'mu': combinedRating?['mu'] ?? 0.0,
+        'sigma': combinedRating?['sigma'] ?? 0.0,
+        'teamworkMatches': teamworkScores.length,
       },
       'skillsQuality': {
         'score': skillsScores['quality']!,
         'maxScore': 25.0,
-        'description': 'Normalized score based on 300-point scale',
+        'description': 'Based on percentile ranking among all teams',
         'combinedScore': worldSkills['combined'],
+        'ranking': worldSkills['ranking'],
+        'totalTeams': worldSkills['totalTeams'],
       },
       'skillsBalance': {
         'score': skillsScores['balance']!,
@@ -649,14 +1144,20 @@ class VEXIQScoring {
       'competitionPerformance': {
         'score': competitionScore,
         'maxScore': 20.0,
-        'description': 'Based on average qualification ranking',
-        'eventCount': rankingsData?.length ?? 0,
+        'description': 'Based on average qualification ranking (includes past seasons)',
+        'eventCount': (rankingsData?.length ?? 0) + (multiSeasonData['rankings']?.length ?? 0),
       },
       'awardExcellence': {
         'score': awardScore,
         'maxScore': 20.0,
-        'description': 'Weighted scoring for different award types',
-        'awardCount': awardsData?.length ?? 0,
+        'description': 'Weighted scoring for different award types (includes past seasons)',
+        'awardCount': (awardsData?.length ?? 0) + (multiSeasonData['awards']?.length ?? 0),
+      },
+      'achievementBonuses': {
+        'score': achievementBonus,
+        'maxScore': 10.0,
+        'description': 'Bonuses for world qualification, multiple signature events, etc.',
+        'worldQualified': achievementBonus >= 5.0,
       },
       'totalScore': totalScore,
       'maxPossibleScore': maxScore,

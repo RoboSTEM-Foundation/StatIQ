@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stat_iq/utils/logger.dart';
 
 class TeamSearchService {
   static const String _searchIndexKey = 'team_search_index';

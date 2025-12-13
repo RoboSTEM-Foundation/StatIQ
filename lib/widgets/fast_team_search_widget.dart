@@ -7,6 +7,7 @@ import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:stat_iq/services/user_settings.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
+import 'package:stat_iq/utils/logger.dart';
 import 'dart:async';
 
 class FastTeamSearchWidget extends StatefulWidget {

@@ -7,6 +7,7 @@ import 'package:stat_iq/services/special_teams_service.dart';
 import 'package:stat_iq/models/team.dart';
 import 'package:stat_iq/screens/team_details_screen.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
+import 'package:stat_iq/utils/logger.dart';
 // import 'package:stat_iq/screens/event_details_screen.dart';
 
 class FavoritesScreen extends StatefulWidget {

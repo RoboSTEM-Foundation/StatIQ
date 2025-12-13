@@ -146,29 +146,71 @@ class _EventsScreenState extends State<EventsScreen> {
 
     // Apply region filter (can't be done via API)
     if (_selectedRegions.isNotEmpty) {
+      // Normalize and expand selected regions (handle abbreviations)
       final normalizedSelections = _selectedRegions
-          .map((region) => _normalizeRegion(region))
+          .map((region) => _expandRegionAbbreviation(region))
           .where((region) => region.isNotEmpty)
           .toList();
+      
       filteredEvents = filteredEvents.where((event) {
-        final eventRegion = _normalizeRegion(_getEventRegion(event));
+        // Get event region and normalize it
+        final eventRegionRaw = _getEventRegion(event);
+        final eventRegion = _expandRegionAbbreviation(eventRegionRaw);
+        final eventCity = _normalizeRegion(event.city ?? '');
         final eventCountry = _normalizeRegion(event.country ?? '');
-        if (eventRegion.isEmpty && eventCountry.isEmpty) {
+        
+        // If event has no location data, exclude it
+        if (eventRegion.isEmpty && eventCity.isEmpty && eventCountry.isEmpty) {
           return false;
         }
-        return normalizedSelections.any((region) {
-          if (eventRegion.isNotEmpty &&
-              (eventRegion == region ||
-               eventRegion.contains(region) ||
-               region.contains(eventRegion))) {
+        
+        // Check if any selected region matches
+        return normalizedSelections.any((selectedRegion) {
+          // Exact match
+          if (eventRegion == selectedRegion) {
             return true;
           }
-          if (eventCountry.isNotEmpty &&
-              (eventCountry == region ||
-               eventCountry.contains(region) ||
-               region.contains(eventCountry))) {
-            return true;
+          
+          // Check if event region contains selected region or vice versa
+          if (eventRegion.isNotEmpty && selectedRegion.isNotEmpty) {
+            if (eventRegion.contains(selectedRegion) || 
+                selectedRegion.contains(eventRegion)) {
+              return true;
+            }
+            
+            // Check for word-level matches (e.g., "wisconsin" matches "wisconsin" in "wisconsin usa")
+            final eventWords = eventRegion.split(' ');
+            final selectedWords = selectedRegion.split(' ');
+            
+            // If all words in selected region appear in event region
+            if (selectedWords.every((word) => eventWords.contains(word))) {
+              return true;
+            }
+            
+            // If all words in event region appear in selected region (for partial matches)
+            if (eventWords.every((word) => selectedWords.contains(word)) && 
+                eventWords.length <= selectedWords.length) {
+              return true;
+            }
           }
+          
+          // Check city match (for cases where region might be empty but city matches)
+          if (eventCity.isNotEmpty && selectedRegion.isNotEmpty) {
+            if (eventCity.contains(selectedRegion) || 
+                selectedRegion.contains(eventCity)) {
+              return true;
+            }
+          }
+          
+          // Check country match
+          if (eventCountry.isNotEmpty && selectedRegion.isNotEmpty) {
+            if (eventCountry == selectedRegion || 
+                eventCountry.contains(selectedRegion) ||
+                selectedRegion.contains(eventCountry)) {
+              return true;
+            }
+          }
+          
           return false;
         });
       }).toList();
@@ -251,7 +293,90 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   String _normalizeRegion(String input) {
-    return input.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+    if (input.isEmpty) return '';
+    // Normalize: lowercase, replace special chars with spaces, collapse multiple spaces
+    var normalized = input.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+    // Replace multiple spaces with single space
+    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ');
+    return normalized;
+  }
+  
+  /// Maps common abbreviations and variations to standard region names
+  String _expandRegionAbbreviation(String region) {
+    final normalized = _normalizeRegion(region);
+    final abbreviationMap = {
+      'wi': 'wisconsin',
+      'ca': 'california',
+      'ny': 'new york',
+      'tx': 'texas',
+      'fl': 'florida',
+      'il': 'illinois',
+      'pa': 'pennsylvania',
+      'oh': 'ohio',
+      'ga': 'georgia',
+      'nc': 'north carolina',
+      'mi': 'michigan',
+      'nj': 'new jersey',
+      'va': 'virginia',
+      'wa': 'washington',
+      'az': 'arizona',
+      'ma': 'massachusetts',
+      'tn': 'tennessee',
+      'in': 'indiana',
+      'mo': 'missouri',
+      'md': 'maryland',
+      'co': 'colorado',
+      'or': 'oregon',
+      'sc': 'south carolina',
+      'al': 'alabama',
+      'la': 'louisiana',
+      'ky': 'kentucky',
+      'ct': 'connecticut',
+      'ia': 'iowa',
+      'ok': 'oklahoma',
+      'ar': 'arkansas',
+      'ut': 'utah',
+      'nv': 'nevada',
+      'ms': 'mississippi',
+      'ks': 'kansas',
+      'nm': 'new mexico',
+      'ne': 'nebraska',
+      'wv': 'west virginia',
+      'id': 'idaho',
+      'hi': 'hawaii',
+      'nh': 'new hampshire',
+      'me': 'maine',
+      'ri': 'rhode island',
+      'mt': 'montana',
+      'de': 'delaware',
+      'sd': 'south dakota',
+      'nd': 'north dakota',
+      'ak': 'alaska',
+      'vt': 'vermont',
+      'wy': 'wyoming',
+      'dc': 'district of columbia',
+      'bc': 'british columbia',
+      'on': 'ontario',
+      'qc': 'quebec',
+      'ab': 'alberta',
+      'sk': 'saskatchewan',
+      'mb': 'manitoba',
+      'ns': 'nova scotia',
+      'nb': 'new brunswick',
+      'nl': 'newfoundland and labrador',
+      'pe': 'prince edward island',
+      'yt': 'yukon',
+      'nt': 'northwest territories',
+      'nu': 'nunavut',
+    };
+    
+    // Check if it's a known abbreviation
+    if (abbreviationMap.containsKey(normalized)) {
+      return abbreviationMap[normalized]!;
+    }
+    
+    // Return normalized version
+    return normalized;
   }
 
   String _getEventLevelLabel(Event event) {

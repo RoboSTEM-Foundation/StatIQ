@@ -9,6 +9,7 @@ import 'package:stat_iq/widgets/vex_iq_score_card.dart';
 import 'package:stat_iq/constants/app_constants.dart';
 // import 'package:stat_iq/constants/api_config.dart';
 import 'package:stat_iq/utils/theme_utils.dart';
+import 'package:stat_iq/utils/logger.dart';
 import 'package:stat_iq/screens/event_details_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -652,6 +653,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                           style: AppConstants.bodyText1.copyWith(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            color: ThemeUtils.getTextColor(context),
                           ),
                         ),
                         const Spacer(),
@@ -710,6 +712,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                     style: AppConstants.headline4.copyWith(
                       fontWeight: FontWeight.bold,
                       fontSize: 24,
+                      color: ThemeUtils.getTextColor(context),
                     ),
                   ),
                   Icon(
@@ -1213,6 +1216,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                           event.name,
                           style: AppConstants.bodyText1.copyWith(
                             fontWeight: FontWeight.bold,
+                            color: ThemeUtils.getTextColor(context),
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 2,
@@ -1368,6 +1372,7 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> with SingleTicker
                         awardTitle,
                         style: AppConstants.bodyText1.copyWith(
                           fontWeight: FontWeight.bold,
+                          color: ThemeUtils.getTextColor(context),
                         ),
                       ),
                     ),

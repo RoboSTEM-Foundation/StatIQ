@@ -1,3 +1,5 @@
+import 'package:stat_iq/utils/logger.dart';
+
 class Event {
   final int id;
   final String sku;

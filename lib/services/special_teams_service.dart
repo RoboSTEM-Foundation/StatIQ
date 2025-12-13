@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'package:stat_iq/utils/logger.dart';
 
 /// Service to load and query special team designations
 class SpecialTeamsService {

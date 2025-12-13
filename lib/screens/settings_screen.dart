@@ -324,7 +324,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Text(
                         'Notifications for:',
-                        style: AppConstants.bodyText1,
+                        style: AppConstants.bodyText1.copyWith(
+                          color: ThemeUtils.getTextColor(context),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       if (settings.myTeam != null) ...[
@@ -360,7 +362,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Text(
                         'Minutes before match:',
-                        style: AppConstants.bodyText1,
+                        style: AppConstants.bodyText1.copyWith(
+                          color: ThemeUtils.getTextColor(context),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(

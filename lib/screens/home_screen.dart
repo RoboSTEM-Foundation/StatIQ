@@ -807,7 +807,9 @@ class _TeamDetailsBottomSheetState extends State<_TeamDetailsBottomSheet> {
                 if (event.start != null)
                   Text(
                     '${event.start!.day}/${event.start!.month}/${event.start!.year}',
-                    style: AppConstants.caption,
+                    style: AppConstants.caption.copyWith(
+                      color: ThemeUtils.getSecondaryTextColor(context),
+                    ),
                   ),
               ],
             ),

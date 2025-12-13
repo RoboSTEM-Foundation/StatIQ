@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stat_iq/services/robotevents_api.dart';
 import 'package:stat_iq/constants/api_config.dart';
+import 'package:stat_iq/utils/logger.dart';
 
 class SimpleTeamSearch {
   static const String _teamDataKey = 'cached_team_list';

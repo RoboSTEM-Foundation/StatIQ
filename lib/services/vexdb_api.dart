@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:stat_iq/utils/logger.dart';
 
 class VexDBAPI {
   static const String baseUrl = 'https://vexdb.io/v1';

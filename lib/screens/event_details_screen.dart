@@ -11,6 +11,7 @@ import '../services/team_sync_service.dart';
 import '../services/notification_service.dart';
 import '../constants/app_constants.dart';
 import '../utils/theme_utils.dart';
+import '../utils/logger.dart';
 import '../widgets/optimized_team_search_widget.dart';
 import '../widgets/simple_team_search_widget.dart';
 import 'team_details_screen.dart';
@@ -520,7 +521,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                         Flexible(
                           child: Text(
                             name,
-                            style: AppConstants.bodyText1,
+                            style: AppConstants.bodyText1.copyWith(
+                              color: ThemeUtils.getTextColor(context),
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -764,7 +767,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           Expanded(
             child: Text(
               value,
-              style: AppConstants.bodyText1,
+              style: AppConstants.bodyText1.copyWith(
+                color: ThemeUtils.getTextColor(context),
+              ),
             ),
           ),
         ],
@@ -870,7 +875,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                 if (team.organization.isNotEmpty) 
                   Text(
                     team.organization,
-                    style: AppConstants.caption,
+                    style: AppConstants.caption.copyWith(
+                      color: ThemeUtils.getSecondaryTextColor(context),
+                    ),
                   ),
               ],
             ),
@@ -1834,7 +1841,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     children: [
                       Text(
                         'Notifications for:',
-                        style: AppConstants.bodyText1,
+                        style: AppConstants.bodyText1.copyWith(
+                          color: ThemeUtils.getTextColor(context),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       if (settings.myTeam != null) ...[
@@ -1870,7 +1879,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     children: [
                       Text(
                         'Minutes before match:',
-                        style: AppConstants.bodyText1,
+                        style: AppConstants.bodyText1.copyWith(
+                          color: ThemeUtils.getTextColor(context),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -3710,7 +3721,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               Container(
                 padding: const EdgeInsets.all(AppConstants.spacingS),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]!.withOpacity(0.3)
+                      : Colors.grey[50],
                   borderRadius: BorderRadius.circular(AppConstants.borderRadiusS),
                 ),
                 child: Row(

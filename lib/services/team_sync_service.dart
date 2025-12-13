@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stat_iq/services/optimized_team_search.dart';
+import 'package:stat_iq/utils/logger.dart';
 
 class TeamSyncService {
   static const String _teamListUrl = 'https://api.github.com/repos/Lavadeg31/teamlist/contents/lib/data/master_team_list.json';
